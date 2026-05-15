@@ -1,0 +1,68 @@
+name: Bug report
+description: Report a problem with the template, documentation, CI, Docker, or example app.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for template bugs and documentation issues. Do not disclose unfixed security vulnerabilities here; use GitHub private vulnerability reporting.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List the smallest steps needed to reproduce the issue.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Rust version, Node.js version, npm version, Docker version, and database backend when relevant.
+      placeholder: |
+        OS:
+        rustc --version:
+        node --version:
+        npm --version:
+        docker --version:
+        database:
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or output
+      description: Paste relevant logs with secrets removed.
+      render: text
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification commands
+      description: Which commands did you run?
+      placeholder: |
+        cargo test --workspace
+        npm --prefix front run build
+        docker compose -f docker-compose.yml config

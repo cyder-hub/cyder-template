@@ -1,0 +1,42 @@
+name: Template improvement
+description: Suggest a generic improvement to the template.
+title: "[Improvement]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for reusable template improvements, not application-specific product requirements.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should the template make easier or safer?
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario
+      description: Who needs this, and when would they use it?
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: What should this proposal avoid doing?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you consider?
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: How should maintainers verify the change?
+      placeholder: |
+        cargo test --workspace
+        npm --prefix front run build
+        docker build -t cyder-template:ci -f Dockerfile .

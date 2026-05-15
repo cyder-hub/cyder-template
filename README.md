@@ -4,6 +4,36 @@ Rust + Vue project template for a small backend-first web application.
 
 The template provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style `i64` IDs, health/readiness checks, and a Vue 3 operations UI for the example `items` and `users` resources. The `users` resource is only CRUD sample data; it is not an authentication, role, team, or tenant system.
 
+## Use This Template
+
+Create a new repository from this template with GitHub's **Use this template** button, then clone your new repository and rename the project before the first release. Search for these template names after each rename pass:
+
+- `cyder-template`
+- `cyder_template`
+- `cyder-template-front`
+
+Rename checklist:
+
+- `README.md`: update the title and project description.
+- `server/Cargo.toml`: update `[package].name`, `default-run`, and `[[bin]].name`.
+- `Cargo.lock`: regenerate it after changing the Rust package name.
+- `front/package.json`: update the `name` field from `cyder-template-front`.
+- `Dockerfile`: update `cargo build -p cyder-template`, the copied release binary path, and `CMD ["cyder-template"]`.
+- `docker-compose.yml`: update the `cyder-template:local` image name, `cyder-template-data` and `cyder-template-postgres-data` volumes, and the default `cyder_template` database, user, and URL values.
+- `.env.example`: update `APP_DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+- `config.sample.yaml`: update the default SQLite path and PostgreSQL URL examples.
+- `justfile`: update the crate name used by Cargo recipes and the default Docker image name.
+- `.github/workflows/ci.yml`: update the CI Docker tag `cyder-template:ci`.
+
+Shortest local verification path after renaming:
+
+```bash
+npm --prefix front ci
+just check
+docker compose -f docker-compose.yml config
+docker build -t cyder-template:ci -f Dockerfile .
+```
+
 ## Requirements
 
 - Rust 1.94 or newer
@@ -160,3 +190,7 @@ The GitHub Actions workflow at `.github/workflows/ci.yml` runs:
 - Docker compose config validation and Docker build smoke
 
 Node should stay on the 24.x line across local development and CI, with 24.11 or newer as the minimum.
+
+## License
+
+Licensed under `MIT OR Apache-2.0`, at your option. See `LICENSE`, `LICENSE-APACHE`, and `LICENSE-MIT`.
