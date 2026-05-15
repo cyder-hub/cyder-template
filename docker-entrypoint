@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${APP_DATA_DIR:=/data/app}"
+: "${APP_PUBLIC_DIR:=/app/public}"
+: "${APP_HOST:=0.0.0.0}"
+: "${APP_PORT:=8000}"
+: "${APP_CONFIG_PATH:=${APP_DATA_DIR}/config/config.yaml}"
+
+export APP_DATA_DIR
+export APP_PUBLIC_DIR
+export APP_HOST
+export APP_PORT
+export APP_CONFIG_PATH
+
+mkdir -p \
+  "${APP_DATA_DIR}/config" \
+  "${APP_DATA_DIR}/db" \
+  "${APP_DATA_DIR}/storage" \
+  "${APP_DATA_DIR}/tmp"
+
+if [[ "$(id -u)" = "0" ]]; then
+  chown -R app:app "${APP_DATA_DIR}"
+  exec gosu app "$0" "$@"
+fi
+
+exec "$@"

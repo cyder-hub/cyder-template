@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cyder_template}
+      POSTGRES_USER: ${POSTGRES_USER:-cyder_template}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cyder_template_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - cyder-template-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cyder-template:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8000
+      APP_DATA_DIR: /data/app
+      APP_PUBLIC_DIR: /app/public
+      APP_CONFIG_PATH: /data/app/config/config.yaml
+      APP_DATABASE_URL: postgres://${POSTGRES_USER:-cyder_template}:${POSTGRES_PASSWORD:-cyder_template_dev}@postgres:5432/${POSTGRES_DB:-cyder_template}
+      APP_DATABASE_POOL_SIZE: ${APP_DATABASE_POOL_SIZE:-5}
+      APP_ID_WORKER_ID: ${APP_ID_WORKER_ID:-1}
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-info}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - cyder-template-data:/data/app
+
+volumes:
+  cyder-template-data:
+  cyder-template-postgres-data:

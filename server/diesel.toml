@@ -1,0 +1,11 @@
+# The template keeps separate schema modules for each supported database.
+# Regenerate them from the server directory with:
+#
+#   DATABASE_URL=.app/dev/db/cyder-template.sqlite diesel print-schema > src/schema/sqlite.rs
+#   DATABASE_URL=postgres://app:app@localhost:5432/cyder_template diesel print-schema > src/schema/postgres.rs
+#
+# The file target below intentionally points at SQLite so `diesel setup` does
+# not create a conflicting `src/schema.rs`.
+
+[print_schema]
+file = "src/schema/sqlite.rs"
