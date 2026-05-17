@@ -193,4 +193,4 @@ Node should stay on the 24.x line across local development and CI, with 24.11 or
 
 ## License
 
-Licensed under `MIT OR Apache-2.0`, at your option. See `LICENSE`, `LICENSE-APACHE`, and `LICENSE-MIT`.
+Licensed under the MIT License. See `LICENSE`.
