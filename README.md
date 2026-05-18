@@ -22,7 +22,7 @@ Rename checklist:
 - `front/package.json` and `front/package-lock.json`: update the package name from `cyder-template-front`.
 - `front/index.html`, `front/src/App.vue`, and `front/src/store/index.ts`: update visible app and service names.
 - `Dockerfile`: update `cargo build -p cyder-template`, the copied release binary path, and `CMD ["cyder-template"]`.
-- `docker-compose.yml`: update the `cyder-template:local` image name, `cyder-template-data` and `cyder-template-postgres-data` volumes, and the default `cyder_template` database, user, and URL values.
+- `docker-compose.yml` and `docker/postgres/init/`: update the `cyder-template:local` image name, `cyder-template-data` and `cyder-template-postgres-data` volumes, and the default `cyder_template` database, test database, user, and URL values.
 - `justfile`: update the crate name used by Cargo recipes and the default Docker image name.
 - `.github/workflows/ci.yml`: update the Docker image tag `cyder-template:ci`.
 - `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/feature_request.yml`, and `CONTRIBUTING.md`: update verification command examples.
@@ -71,6 +71,7 @@ just install-front-deps  # npm install when package files changed
 just front-ci-deps       # npm ci
 just build               # backend release binary and frontend dist
 just test                # backend tests and frontend type checks
+just test-postgres       # optional PostgreSQL integration tests
 just check               # fmt, check, tests, frontend build
 just docker-build        # local Docker image build
 ```
@@ -94,6 +95,8 @@ APP_PORT=8000
 APP_DATA_DIR=.app/dev
 APP_DATABASE_URL=.app/dev/db/cyder-template.sqlite
 APP_DATABASE_POOL_SIZE=1
+APP_DATABASE_ACQUIRE_TIMEOUT_MS=30000
+APP_SQLITE_BUSY_TIMEOUT_MS=5000
 APP_ID_WORKER_ID=1
 APP_LOG_LEVEL=info
 APP_PUBLIC_DIR=front/dist
@@ -103,13 +106,15 @@ Copy `.env.example` to `.env` when you want `just` recipes to load local overrid
 
 ## Databases
 
+The backend keeps Diesel as the template's default database layer and uses `diesel_async` for async connection pooling and query execution. This preserves Diesel schema files, embedded migrations, and typed query composition for projects that grow beyond the sample `items` and `users` resources. SQL-first libraries can still be a good choice for other templates; this template defaults to Diesel because it already carries dual SQLite/PostgreSQL schema and migration structure.
+
 SQLite is the default development database. No external service is required:
 
 ```bash
 just dev-backend
 ```
 
-The default SQLite pool size is `1` so writes are serialized through a single connection and avoid SQLite write lock churn during local development.
+The default SQLite pool size is `1` for a conservative local path. File-backed SQLite may use `APP_DATABASE_POOL_SIZE` greater than `1`; each pooled connection enables WAL mode, `APP_SQLITE_BUSY_TIMEOUT_MS`, and foreign keys. This helps read concurrency and short write-lock waits, but SQLite still has one writer at a time and should not be treated like PostgreSQL for parallel writes. Plain `:memory:` SQLite is kept to one effective pooled connection so migrations and queries see the same in-memory schema.
 
 Generated IDs use a 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 worker bits, and 12 sequence bits. Set `APP_ID_WORKER_ID` to a unique value from `0` to `255` for each running instance.
 
@@ -119,7 +124,17 @@ Use PostgreSQL by setting `APP_DATABASE_URL`:
 APP_DATABASE_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template APP_DATABASE_POOL_SIZE=5 just dev-backend
 ```
 
-The service detects the backend from the URL and runs the matching embedded Diesel migrations at startup.
+The service detects the backend from the URL and runs the matching embedded Diesel migrations at startup. `APP_DATABASE_ACQUIRE_TIMEOUT_MS` controls how long a request waits for a pooled connection before failing readiness or database operations.
+
+PostgreSQL integration tests are opt-in because they need a disposable database. Point `APP_TEST_POSTGRES_URL` at an isolated test database, then run:
+
+```bash
+APP_TEST_POSTGRES_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
+```
+
+The PostgreSQL test uses a pool size greater than one and covers migrations, readiness, and example `items`/`users` CRUD. Without `APP_TEST_POSTGRES_URL`, the ignored PostgreSQL test is not part of the default `cargo test --workspace` path.
+
+The compose setup creates `cyder_template_test` only when PostgreSQL initializes a fresh volume. If you already have a local compose volume, create a separate test database manually or recreate the local volume before running the PostgreSQL integration test.
 
 Schema files are split by backend:
 

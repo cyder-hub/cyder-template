@@ -40,9 +40,8 @@ pub struct DeleteItemResponse {
 }
 
 pub async fn list_items(State(state): State<AppState>) -> AppResult<Json<Vec<ItemResponse>>> {
-    items::list(state.database())
-        .map(|items| items.into_iter().map(ItemResponse::from).collect())
-        .map(Json)
+    let items = items::list(state.database()).await?;
+    Ok(Json(items.into_iter().map(ItemResponse::from).collect()))
 }
 
 pub async fn create_item(
@@ -50,6 +49,7 @@ pub async fn create_item(
     Json(input): Json<CreateItemInput>,
 ) -> AppResult<Json<ItemResponse>> {
     items::create(state.database(), state.id_generator(), input)
+        .await
         .map(ItemResponse::from)
         .map(Json)
 }
@@ -59,7 +59,8 @@ pub async fn get_item(
     Path(item_id): Path<ApiId>,
 ) -> AppResult<Json<ItemResponse>> {
     let item_id = item_id.into_i64();
-    items::get(state.database(), item_id)?
+    items::get(state.database(), item_id)
+        .await?
         .map(ItemResponse::from)
         .map(Json)
         .ok_or(AppError::NotFound {
@@ -73,7 +74,7 @@ pub async fn delete_item(
     Path(item_id): Path<ApiId>,
 ) -> AppResult<Json<DeleteItemResponse>> {
     let item_id = item_id.into_i64();
-    let deleted = items::delete(state.database(), item_id)?;
+    let deleted = items::delete(state.database(), item_id).await?;
     if !deleted {
         return Err(AppError::NotFound {
             resource: "item",

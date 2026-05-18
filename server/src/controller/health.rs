@@ -24,7 +24,7 @@ pub struct ReadyResponse {
 }
 
 pub async fn readyz(State(state): State<AppState>) -> AppResult<Json<ReadyResponse>> {
-    let database = database::check_readiness(state.database())?;
+    let database = database::check_readiness(state.database()).await?;
 
     Ok(Json(ReadyResponse {
         status: "ready",

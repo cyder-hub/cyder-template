@@ -9,6 +9,7 @@ Commands run:
 - [ ] `cargo fmt --check`
 - [ ] `cargo check --workspace`
 - [ ] `cargo test --workspace`
+- [ ] `APP_TEST_POSTGRES_URL=... just test-postgres` (database changes that affect PostgreSQL)
 - [ ] `npm --prefix front ci`
 - [ ] `npm --prefix front test`
 - [ ] `npm --prefix front run build`
@@ -31,4 +32,5 @@ Commands run:
 
 - [ ] I did not commit `front/node_modules/`, `front/dist/`, `target/`, `.app/`, `.env`, local databases, logs, or credentials.
 - [ ] I updated README or contributing guidance where behavior, commands, naming, or dependencies changed.
+- [ ] I listed SQLite and PostgreSQL verification results for database behavior changes, or explained why a backend was not run.
 - [ ] I avoided adding claims for unimplemented features.

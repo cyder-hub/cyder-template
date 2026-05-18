@@ -10,6 +10,8 @@ pub struct AppConfig {
     pub port: u16,
     pub database_url: String,
     pub database_pool_size: u32,
+    pub database_acquire_timeout_ms: u64,
+    pub sqlite_busy_timeout_ms: u64,
     pub id_worker_id: u64,
     pub log_level: String,
     pub public_dir: String,
@@ -22,6 +24,8 @@ impl Default for AppConfig {
             port: 8000,
             database_url: default_database_url(),
             database_pool_size: 1,
+            database_acquire_timeout_ms: 30_000,
+            sqlite_busy_timeout_ms: 5_000,
             id_worker_id: 1,
             log_level: "info".to_string(),
             public_dir: "front/dist".to_string(),
@@ -37,6 +41,11 @@ impl AppConfig {
             .set_default("port", defaults.port)?
             .set_default("database_url", defaults.database_url)?
             .set_default("database_pool_size", defaults.database_pool_size)?
+            .set_default(
+                "database_acquire_timeout_ms",
+                defaults.database_acquire_timeout_ms,
+            )?
+            .set_default("sqlite_busy_timeout_ms", defaults.sqlite_busy_timeout_ms)?
             .set_default("id_worker_id", defaults.id_worker_id)?
             .set_default("log_level", defaults.log_level)?
             .set_default("public_dir", defaults.public_dir)?;
@@ -91,6 +100,11 @@ mod tests {
         env.insert("APP_PORT".to_string(), "9000".to_string());
         env.insert("APP_DATABASE_URL".to_string(), ":memory:".to_string());
         env.insert("APP_DATABASE_POOL_SIZE".to_string(), "7".to_string());
+        env.insert(
+            "APP_DATABASE_ACQUIRE_TIMEOUT_MS".to_string(),
+            "2500".to_string(),
+        );
+        env.insert("APP_SQLITE_BUSY_TIMEOUT_MS".to_string(), "1500".to_string());
         env.insert("APP_ID_WORKER_ID".to_string(), "3".to_string());
         env.insert("APP_LOG_LEVEL".to_string(), "debug".to_string());
         env.insert("APP_PUBLIC_DIR".to_string(), "front/dist".to_string());
@@ -106,8 +120,19 @@ mod tests {
         assert_eq!(config.port, 9000);
         assert_eq!(config.database_url, ":memory:");
         assert_eq!(config.database_pool_size, 7);
+        assert_eq!(config.database_acquire_timeout_ms, 2500);
+        assert_eq!(config.sqlite_busy_timeout_ms, 1500);
         assert_eq!(config.id_worker_id, 3);
         assert_eq!(config.log_level, "debug");
         assert_eq!(config.public_dir, "front/dist");
+    }
+
+    #[test]
+    fn default_config_sets_database_timeout_contract() {
+        let config = AppConfig::default();
+
+        assert_eq!(config.database_pool_size, 1);
+        assert_eq!(config.database_acquire_timeout_ms, 30_000);
+        assert_eq!(config.sqlite_busy_timeout_ms, 5_000);
     }
 }

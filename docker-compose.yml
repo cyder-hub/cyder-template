@@ -8,6 +8,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
       - cyder-template-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
@@ -35,6 +36,8 @@ services:
       APP_CONFIG_PATH: /data/app/config/config.yaml
       APP_DATABASE_URL: postgres://${POSTGRES_USER:-cyder_template}:${POSTGRES_PASSWORD:-cyder_template_dev}@postgres:5432/${POSTGRES_DB:-cyder_template}
       APP_DATABASE_POOL_SIZE: ${COMPOSE_APP_DATABASE_POOL_SIZE:-5}
+      APP_DATABASE_ACQUIRE_TIMEOUT_MS: ${APP_DATABASE_ACQUIRE_TIMEOUT_MS:-30000}
+      APP_SQLITE_BUSY_TIMEOUT_MS: ${APP_SQLITE_BUSY_TIMEOUT_MS:-5000}
       APP_ID_WORKER_ID: ${APP_ID_WORKER_ID:-1}
       APP_LOG_LEVEL: ${APP_LOG_LEVEL:-info}
     ports:

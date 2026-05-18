@@ -35,6 +35,14 @@ just check
 
 `just check` covers Rust formatting, backend check/tests, frontend tests, and frontend build. The checked-in GitHub Actions workflow mirrors the direct backend, frontend, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
 
+When database changes affect persistence, include the relevant backend coverage in the pull request notes. SQLite changes should usually include `cargo test --workspace`, which covers file-backed SQLite migrations, readiness, and CRUD. PostgreSQL behavior is covered by the opt-in integration test against an isolated test database:
+
+```bash
+APP_TEST_POSTGRES_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
+```
+
+Do not point `APP_TEST_POSTGRES_URL` at production, shared, or long-lived data.
+
 ## Pull Requests
 
 Create a branch from the current `main` branch and keep the pull request focused on one change. Include a concise summary, the verification commands you ran, and any follow-up work that remains.

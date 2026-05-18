@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::database::{DatabaseError, DbConnectionRef, DbPool};
+use crate::database::{DatabaseError, DbConnection, DbPool};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct User {
@@ -24,38 +24,100 @@ pub struct NewUser {
     pub updated_at: i64,
 }
 
-pub fn create(pool: &DbPool, new_user: NewUser) -> Result<User, DatabaseError> {
-    pool.with_connection(|conn| match conn {
-        DbConnectionRef::Postgres(conn) => postgres::create(conn, new_user),
-        DbConnectionRef::Sqlite(conn) => sqlite::create(conn, new_user),
-    })
+pub async fn create(pool: &DbPool, new_user: NewUser) -> Result<User, DatabaseError> {
+    let mut conn = pool.get().await?;
+    match &mut conn {
+        DbConnection::Postgres(conn) => {
+            postgres::create(conn, new_user)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "postgres",
+                    source,
+                })
+        }
+        DbConnection::Sqlite(conn) => {
+            sqlite::create(conn, new_user)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "sqlite",
+                    source,
+                })
+        }
+    }
 }
 
-pub fn list(pool: &DbPool) -> Result<Vec<User>, DatabaseError> {
-    pool.with_connection(|conn| match conn {
-        DbConnectionRef::Postgres(conn) => postgres::list(conn),
-        DbConnectionRef::Sqlite(conn) => sqlite::list(conn),
-    })
+pub async fn list(pool: &DbPool) -> Result<Vec<User>, DatabaseError> {
+    let mut conn = pool.get().await?;
+    match &mut conn {
+        DbConnection::Postgres(conn) => {
+            postgres::list(conn)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "postgres",
+                    source,
+                })
+        }
+        DbConnection::Sqlite(conn) => {
+            sqlite::list(conn)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "sqlite",
+                    source,
+                })
+        }
+    }
 }
 
-pub fn get(pool: &DbPool, user_id: i64) -> Result<Option<User>, DatabaseError> {
-    pool.with_connection(|conn| match conn {
-        DbConnectionRef::Postgres(conn) => postgres::get(conn, user_id),
-        DbConnectionRef::Sqlite(conn) => sqlite::get(conn, user_id),
-    })
+pub async fn get(pool: &DbPool, user_id: i64) -> Result<Option<User>, DatabaseError> {
+    let mut conn = pool.get().await?;
+    match &mut conn {
+        DbConnection::Postgres(conn) => {
+            postgres::get(conn, user_id)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "postgres",
+                    source,
+                })
+        }
+        DbConnection::Sqlite(conn) => {
+            sqlite::get(conn, user_id)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "sqlite",
+                    source,
+                })
+        }
+    }
 }
 
-pub fn delete(pool: &DbPool, user_id: i64) -> Result<bool, DatabaseError> {
-    pool.with_connection(|conn| match conn {
-        DbConnectionRef::Postgres(conn) => postgres::delete(conn, user_id),
-        DbConnectionRef::Sqlite(conn) => sqlite::delete(conn, user_id),
-    })
+pub async fn delete(pool: &DbPool, user_id: i64) -> Result<bool, DatabaseError> {
+    let mut conn = pool.get().await?;
+    match &mut conn {
+        DbConnection::Postgres(conn) => {
+            postgres::delete(conn, user_id)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "postgres",
+                    source,
+                })
+        }
+        DbConnection::Sqlite(conn) => {
+            sqlite::delete(conn, user_id)
+                .await
+                .map_err(|source| DatabaseError::Operation {
+                    backend: "sqlite",
+                    source,
+                })
+        }
+    }
 }
 
 mod sqlite {
     use diesel::{OptionalExtension, prelude::*};
+    use diesel_async::RunQueryDsl;
 
     use super::{NewUser, User};
+    use crate::database::SqliteConnection;
     use crate::schema::sqlite::users;
 
     #[derive(Queryable, Selectable)]
@@ -106,43 +168,55 @@ mod sqlite {
         }
     }
 
-    pub(super) fn create(conn: &mut SqliteConnection, new_user: NewUser) -> QueryResult<User> {
+    pub(super) async fn create(
+        conn: &mut SqliteConnection,
+        new_user: NewUser,
+    ) -> QueryResult<User> {
         diesel::insert_into(users::table)
             .values(NewUserRow::from(new_user))
             .returning(UserRow::as_returning())
             .get_result(conn)
+            .await
             .map(User::from)
     }
 
-    pub(super) fn list(conn: &mut SqliteConnection) -> QueryResult<Vec<User>> {
+    pub(super) async fn list(conn: &mut SqliteConnection) -> QueryResult<Vec<User>> {
         users::table
             .order(users::created_at.desc())
             .then_order_by(users::id.desc())
             .select(UserRow::as_select())
             .load::<UserRow>(conn)
+            .await
             .map(|rows| rows.into_iter().map(User::from).collect())
     }
 
-    pub(super) fn get(conn: &mut SqliteConnection, user_id: i64) -> QueryResult<Option<User>> {
+    pub(super) async fn get(
+        conn: &mut SqliteConnection,
+        user_id: i64,
+    ) -> QueryResult<Option<User>> {
         users::table
             .find(user_id)
             .select(UserRow::as_select())
             .first::<UserRow>(conn)
+            .await
             .optional()
             .map(|row| row.map(User::from))
     }
 
-    pub(super) fn delete(conn: &mut SqliteConnection, user_id: i64) -> QueryResult<bool> {
+    pub(super) async fn delete(conn: &mut SqliteConnection, user_id: i64) -> QueryResult<bool> {
         diesel::delete(users::table.find(user_id))
             .execute(conn)
+            .await
             .map(|affected| affected > 0)
     }
 }
 
 mod postgres {
     use diesel::{OptionalExtension, prelude::*};
+    use diesel_async::RunQueryDsl;
 
     use super::{NewUser, User};
+    use crate::database::PostgresConnection;
     use crate::schema::postgres::users;
 
     #[derive(Queryable, Selectable)]
@@ -193,35 +267,45 @@ mod postgres {
         }
     }
 
-    pub(super) fn create(conn: &mut PgConnection, new_user: NewUser) -> QueryResult<User> {
+    pub(super) async fn create(
+        conn: &mut PostgresConnection,
+        new_user: NewUser,
+    ) -> QueryResult<User> {
         diesel::insert_into(users::table)
             .values(NewUserRow::from(new_user))
             .returning(UserRow::as_returning())
             .get_result(conn)
+            .await
             .map(User::from)
     }
 
-    pub(super) fn list(conn: &mut PgConnection) -> QueryResult<Vec<User>> {
+    pub(super) async fn list(conn: &mut PostgresConnection) -> QueryResult<Vec<User>> {
         users::table
             .order(users::created_at.desc())
             .then_order_by(users::id.desc())
             .select(UserRow::as_select())
             .load::<UserRow>(conn)
+            .await
             .map(|rows| rows.into_iter().map(User::from).collect())
     }
 
-    pub(super) fn get(conn: &mut PgConnection, user_id: i64) -> QueryResult<Option<User>> {
+    pub(super) async fn get(
+        conn: &mut PostgresConnection,
+        user_id: i64,
+    ) -> QueryResult<Option<User>> {
         users::table
             .find(user_id)
             .select(UserRow::as_select())
             .first::<UserRow>(conn)
+            .await
             .optional()
             .map(|row| row.map(User::from))
     }
 
-    pub(super) fn delete(conn: &mut PgConnection, user_id: i64) -> QueryResult<bool> {
+    pub(super) async fn delete(conn: &mut PostgresConnection, user_id: i64) -> QueryResult<bool> {
         diesel::delete(users::table.find(user_id))
             .execute(conn)
+            .await
             .map(|affected| affected > 0)
     }
 }
