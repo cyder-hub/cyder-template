@@ -1,7 +1,7 @@
 import { API_BASE, requestJson } from '@/services/http'
 
 export interface Item {
-  id: number
+  id: string
   title: string
   description: string
   completed: boolean
@@ -28,8 +28,8 @@ export function createItem(input: CreateItemRequest): Promise<Item> {
   })
 }
 
-export function deleteItem(id: number): Promise<{ deleted: boolean }> {
-  return requestJson<{ deleted: boolean }>(`${ITEMS_PATH}/${id}`, {
+export function deleteItem(id: string): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(`${ITEMS_PATH}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
 }

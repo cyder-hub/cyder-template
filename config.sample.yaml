@@ -7,9 +7,10 @@ port: 8000
 # postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template
 # use the PostgreSQL backend.
 database_url: .app/dev/db/cyder-template.sqlite
-database_pool_size: 5
+# SQLite is the local default; use one connection to avoid write lock churn.
+database_pool_size: 1
 
-# Snowflake worker id. Keep each running instance on a distinct value.
+# Snowflake worker id. Keep each running instance on a distinct value from 0 to 255.
 id_worker_id: 1
 log_level: info
 public_dir: front/dist
