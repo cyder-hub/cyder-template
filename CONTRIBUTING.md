@@ -33,7 +33,7 @@ The shorter project shortcut is:
 just check
 ```
 
-`just check` covers Rust formatting, backend check/tests, frontend tests, and frontend build. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
+`just check` covers Rust formatting, backend check/tests, frontend tests, and frontend build. The checked-in GitHub Actions workflow mirrors the direct backend, frontend, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
 
 ## Pull Requests
 
@@ -45,11 +45,11 @@ Before opening a pull request:
 - Do not commit real credentials, tokens, private endpoints, or machine-specific config.
 - Keep the main README in English.
 - Do not add product claims for features the template does not implement, such as authentication, authorization, teams, tenants, or production deployment automation.
-- Update README and template rename guidance when changing `cyder-template`, `cyder_template`, Docker image names, database defaults, or CI tags.
+- Update README and template rename guidance when changing `cyder-template`, `cyder_template`, Docker image names, database defaults, or automation commands.
 
 ## Code Style
 
-Use `cargo fmt` for Rust formatting and the existing TypeScript/Vue toolchain for frontend checks. Prefer the project patterns already present in `server/`, `front/`, `Dockerfile`, and `.github/workflows/ci.yml`.
+Use `cargo fmt` for Rust formatting and the existing TypeScript/Vue toolchain for frontend checks. Prefer the project patterns already present in `server/`, `front/`, `Dockerfile`, and `docker-compose.yml`.
 
 ## Dependency Updates
 

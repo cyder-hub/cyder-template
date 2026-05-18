@@ -1,9 +1,21 @@
-use std::sync::Arc;
+use std::{convert::Infallible, io::ErrorKind, path::PathBuf, sync::Arc};
 
-use axum::{Router, routing::get};
+use axum::{
+    Json, Router,
+    body::Body,
+    http::{HeaderMap, Method, Request, StatusCode, header},
+    response::{Html, IntoResponse, Response},
+    routing::{any, get},
+};
+use tower::service_fn;
 use tower_http::services::ServeDir;
 
-use crate::{config::AppConfig, controller, database, error::AppResult, id::IdGenerator};
+use crate::{
+    config::AppConfig,
+    controller, database,
+    error::{AppResult, ErrorResponse},
+    id::IdGenerator,
+};
 
 pub const APP_NAME: &str = "cyder-template";
 
@@ -43,6 +55,12 @@ impl AppState {
 
 pub fn build_app(state: AppState) -> Router {
     let public_dir = state.config().public_dir.clone();
+    let index_file = PathBuf::from(&public_dir).join("index.html");
+    let static_files =
+        ServeDir::new(public_dir).fallback(service_fn(move |request: Request<Body>| {
+            let index_file = index_file.clone();
+            async move { Ok::<_, Infallible>(spa_fallback(request, index_file).await) }
+        }));
 
     Router::new()
         .route("/healthz", get(controller::health::healthz))
@@ -63,8 +81,67 @@ pub fn build_app(state: AppState) -> Router {
             "/api/users/{id}",
             get(controller::users::get_user).delete(controller::users::delete_user),
         )
-        .fallback_service(ServeDir::new(public_dir))
+        .route("/api", any(api_not_found))
+        .route("/api/", any(api_not_found))
+        .route("/api/{*path}", any(api_not_found))
+        .fallback_service(static_files)
         .with_state(state)
+}
+
+async fn api_not_found() -> (StatusCode, Json<ErrorResponse>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(ErrorResponse {
+            error: "not_found".to_string(),
+            message: "API route was not found".to_string(),
+        }),
+    )
+}
+
+async fn spa_fallback(request: Request<Body>, index_file: PathBuf) -> Response {
+    if !should_serve_spa_index(&request) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    match tokio::fs::read_to_string(index_file).await {
+        Ok(index) => Html(index).into_response(),
+        Err(source) if source.kind() == ErrorKind::NotFound => {
+            StatusCode::NOT_FOUND.into_response()
+        }
+        Err(source) => {
+            tracing::error!(error = %source, "failed to read SPA index fallback");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+fn should_serve_spa_index(request: &Request<Body>) -> bool {
+    if !matches!(request.method(), &Method::GET | &Method::HEAD) {
+        return false;
+    }
+
+    let path = request.uri().path();
+    if path == "/api" || path.starts_with("/api/") || path.starts_with("/assets/") {
+        return false;
+    }
+
+    let last_segment = path.rsplit('/').next().unwrap_or_default();
+    !last_segment.contains('.') && accepts_html(request.headers())
+}
+
+fn accepts_html(headers: &HeaderMap) -> bool {
+    let Some(accept) = headers.get(header::ACCEPT) else {
+        return true;
+    };
+
+    let Ok(accept) = accept.to_str() else {
+        return false;
+    };
+
+    accept.split(',').any(|part| {
+        let mime = part.split(';').next().unwrap_or_default().trim();
+        matches!(mime, "text/html" | "application/xhtml+xml" | "*/*")
+    })
 }
 
 #[cfg(test)]
@@ -140,6 +217,31 @@ mod tests {
         (status, body)
     }
 
+    async fn request_text(app: Router, uri: &str) -> (StatusCode, String) {
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .body(Body::empty())
+                    .expect("request should build"),
+            )
+            .await
+            .expect("request should succeed");
+        let status = response.status();
+        let bytes = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should read");
+
+        (status, String::from_utf8_lossy(&bytes).into_owned())
+    }
+
+    fn json_id_as_i64(value: &Value) -> i64 {
+        value
+            .as_str()
+            .and_then(|id| id.parse::<i64>().ok())
+            .expect("json id should be a signed 64-bit integer string")
+    }
+
     #[tokio::test]
     async fn healthz_returns_ok() {
         let response = build_app(test_state())
@@ -191,10 +293,9 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "create body: {created}");
-        let item_id = created["id"]
-            .as_i64()
-            .expect("created item id should exist");
+        let item_id = json_id_as_i64(&created["id"]);
         assert!(item_id > 0);
+        assert!(created["id"].is_string());
         assert_eq!(created["title"], "Ship CRUD");
         assert_eq!(created["description"], "Wire HTTP handlers");
         assert_eq!(created["completed"], true);
@@ -250,10 +351,9 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK, "create body: {created}");
-        let user_id = created["id"]
-            .as_i64()
-            .expect("created user id should exist");
+        let user_id = json_id_as_i64(&created["id"]);
         assert!(user_id > 0);
+        assert!(created["id"].is_string());
         assert_eq!(created["name"], "Template Operator");
         assert_eq!(created["email"], "operator@example.com");
         assert_eq!(created["active"], false);
@@ -286,5 +386,36 @@ mod tests {
             request_json(app, Method::DELETE, &format!("/api/users/{user_id}"), None).await;
         assert_eq!(status, StatusCode::NOT_FOUND, "missing body: {missing}");
         assert_eq!(missing["error"], "not_found");
+    }
+
+    #[tokio::test]
+    async fn frontend_history_routes_fallback_to_index_without_shadowing_api_404s() {
+        let temp_dir = tempfile::tempdir().expect("temp dir should be created");
+        std::fs::write(temp_dir.path().join("index.html"), "<div id=\"app\"></div>")
+            .expect("index file should be written");
+
+        let state = AppState::new(AppConfig {
+            database_url: ":memory:".to_string(),
+            public_dir: temp_dir.path().to_string_lossy().into_owned(),
+            ..AppConfig::default()
+        })
+        .expect("test app state should initialize");
+        let app = build_app(state);
+
+        let (status, body) = request_text(app.clone(), "/items").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, "<div id=\"app\"></div>");
+
+        let (status, body) = request_json(app.clone(), Method::GET, "/api/", None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "api root body: {body}");
+        assert_eq!(body["error"], "not_found");
+
+        let (status, body) = request_json(app.clone(), Method::GET, "/api/missing", None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "missing body: {body}");
+        assert_eq!(body["error"], "not_found");
+
+        let (status, body) = request_text(app, "/assets/old.js").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(!body.contains("<div id=\"app\"></div>"));
     }
 }

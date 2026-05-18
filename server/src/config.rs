@@ -21,7 +21,7 @@ impl Default for AppConfig {
             host: "127.0.0.1".to_string(),
             port: 8000,
             database_url: default_database_url(),
-            database_pool_size: 5,
+            database_pool_size: 1,
             id_worker_id: 1,
             log_level: "info".to_string(),
             public_dir: "front/dist".to_string(),

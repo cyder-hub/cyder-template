@@ -2,7 +2,7 @@
 
 Rust + Vue project template for a small backend-first web application.
 
-The template provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style `i64` IDs, health/readiness checks, and a Vue 3 operations UI for the example `items` and `users` resources. The `users` resource is only CRUD sample data; it is not an authentication, role, team, or tenant system.
+The template provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style IDs, health/readiness checks, and a Vue 3 operations UI for the example `items` and `users` resources. IDs are stored internally as `i64` and serialized as strings in JSON responses so browser clients do not lose 64-bit integer precision. The `users` resource is only CRUD sample data; it is not an authentication, role, team, or tenant system.
 
 ## Use This Template
 
@@ -17,13 +17,18 @@ Rename checklist:
 - `README.md`: update the title and project description.
 - `server/Cargo.toml`: update `[package].name`, `default-run`, and `[[bin]].name`.
 - `Cargo.lock`: regenerate it after changing the Rust package name.
-- `front/package.json`: update the `name` field from `cyder-template-front`.
+- `server/src/app.rs`: update `APP_NAME`.
+- `server/src/config.rs`, `server/src/database/mod.rs`, `config.sample.yaml`, and `.env.example`: update default SQLite paths and PostgreSQL database/user examples.
+- `front/package.json` and `front/package-lock.json`: update the package name from `cyder-template-front`.
+- `front/index.html`, `front/src/App.vue`, and `front/src/store/index.ts`: update visible app and service names.
 - `Dockerfile`: update `cargo build -p cyder-template`, the copied release binary path, and `CMD ["cyder-template"]`.
 - `docker-compose.yml`: update the `cyder-template:local` image name, `cyder-template-data` and `cyder-template-postgres-data` volumes, and the default `cyder_template` database, user, and URL values.
-- `.env.example`: update `APP_DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
-- `config.sample.yaml`: update the default SQLite path and PostgreSQL URL examples.
 - `justfile`: update the crate name used by Cargo recipes and the default Docker image name.
-- `.github/workflows/ci.yml`: update the CI Docker tag `cyder-template:ci`.
+- `.github/workflows/ci.yml`: update the Docker image tag `cyder-template:ci`.
+- `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/feature_request.yml`, and `CONTRIBUTING.md`: update verification command examples.
+- `.github/ISSUE_TEMPLATE/config.yml`: update the private vulnerability reporting link when the GitHub owner or repository name changes.
+- `.github/dependabot.yml`: update `target-branch` if the new repository does not use `main`.
+- `LICENSE`: update the copyright holder if needed.
 
 Shortest local verification path after renaming:
 
@@ -31,7 +36,7 @@ Shortest local verification path after renaming:
 npm --prefix front ci
 just check
 docker compose -f docker-compose.yml config
-docker build -t cyder-template:ci -f Dockerfile .
+docker build -t your-project:ci -f Dockerfile .
 ```
 
 ## Requirements
@@ -88,7 +93,7 @@ APP_HOST=127.0.0.1
 APP_PORT=8000
 APP_DATA_DIR=.app/dev
 APP_DATABASE_URL=.app/dev/db/cyder-template.sqlite
-APP_DATABASE_POOL_SIZE=5
+APP_DATABASE_POOL_SIZE=1
 APP_ID_WORKER_ID=1
 APP_LOG_LEVEL=info
 APP_PUBLIC_DIR=front/dist
@@ -104,10 +109,14 @@ SQLite is the default development database. No external service is required:
 just dev-backend
 ```
 
+The default SQLite pool size is `1` so writes are serialized through a single connection and avoid SQLite write lock churn during local development.
+
+Generated IDs use a 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 worker bits, and 12 sequence bits. Set `APP_ID_WORKER_ID` to a unique value from `0` to `255` for each running instance.
+
 Use PostgreSQL by setting `APP_DATABASE_URL`:
 
 ```bash
-APP_DATABASE_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template just dev-backend
+APP_DATABASE_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template APP_DATABASE_POOL_SIZE=5 just dev-backend
 ```
 
 The service detects the backend from the URL and runs the matching embedded Diesel migrations at startup.
@@ -136,6 +145,15 @@ Example resources:
 - `POST /api/users`
 - `GET /api/users/{id}`
 - `DELETE /api/users/{id}`
+
+ID boundary convention:
+
+- Database and service structs keep generated IDs as `i64`.
+- Controller response DTOs use `controller::api_id::ApiId` for `id` fields so JSON serializes IDs as strings.
+- Controller path extractors can use `Path<ApiId>`, then call `into_i64()` before passing IDs to service/database functions.
+- Frontend resource types use `string` for IDs and pass those strings back in URLs.
+
+This keeps database indexes and backend arithmetic efficient while avoiding JavaScript 64-bit integer precision loss in browser clients.
 
 ## Frontend
 
@@ -179,17 +197,17 @@ cp .env.example .env
 docker compose up --build
 ```
 
-Compose builds the same `cyder-template:local` image, starts a local PostgreSQL service with a healthcheck, and points `APP_DATABASE_URL` at that service. The compose credentials in `.env.example` are local-development examples. Choose real credentials for shared or deployed environments.
+Compose builds the same `cyder-template:local` image, starts a local PostgreSQL service with a healthcheck, and points `APP_DATABASE_URL` at that service. Compose uses `COMPOSE_APP_DATABASE_POOL_SIZE`, defaulting to `5`, so PostgreSQL keeps a larger pool than the local SQLite default. The compose credentials in `.env.example` are local-development examples. Choose real credentials for shared or deployed environments.
 
-## CI
+## Automation
 
-The GitHub Actions workflow at `.github/workflows/ci.yml` runs:
+This template includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
 
-- Rust formatting, check, and tests
-- Frontend locked install, type checks, and build
-- Docker compose config validation and Docker build smoke
+- `Backend`: installs Rust 1.94 and native build dependencies, then runs Rust formatting, workspace check, and workspace tests.
+- `Frontend`: uses Node 24, runs locked npm install, type checks through `npm test`, and builds the Vite app.
+- `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, and builds `cyder-template:ci`.
 
-Node should stay on the 24.x line across local development and CI, with 24.11 or newer as the minimum.
+When renaming the template, update the workflow's Docker image tag together with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Node should stay on the 24.x line across local development and automation, with 24.11 or newer as the minimum.
 
 ## License
 

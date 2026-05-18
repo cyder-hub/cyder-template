@@ -5,7 +5,7 @@ import { createItem, deleteItem, listItems, type Item } from '@/services/items'
 const items = ref<Item[]>([])
 const loading = ref(false)
 const saving = ref(false)
-const deletingId = ref<number | null>(null)
+const deletingId = ref<string | null>(null)
 const error = ref<string | null>(null)
 const title = ref('')
 const description = ref('')

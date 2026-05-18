@@ -6,8 +6,10 @@ use std::{
 };
 
 const DEFAULT_EPOCH_MS: u64 = 1_716_257_820_000;
-const DEFAULT_WORKER_BITS: u8 = 5;
+const SIGNED_ID_BITS: u8 = 63;
+const DEFAULT_WORKER_BITS: u8 = 8;
 const DEFAULT_SEQUENCE_BITS: u8 = 12;
+const DEFAULT_TIMESTAMP_BITS: u8 = SIGNED_ID_BITS - DEFAULT_WORKER_BITS - DEFAULT_SEQUENCE_BITS;
 
 #[derive(Debug, Clone, Copy)]
 pub struct IdGeneratorConfig {
@@ -187,6 +189,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_layout_is_43_8_12() {
+        assert_eq!(DEFAULT_TIMESTAMP_BITS, 43);
+        assert_eq!(DEFAULT_WORKER_BITS, 8);
+        assert_eq!(DEFAULT_SEQUENCE_BITS, 12);
+    }
+
+    #[test]
     fn generated_ids_are_monotonic() {
         let generator = IdGenerator::for_worker(3).expect("worker id should be valid");
         let mut previous = generator.next_id().expect("first id should generate");
@@ -204,8 +213,8 @@ mod tests {
     #[test]
     fn worker_id_is_validated_against_worker_bits() {
         let config = IdGeneratorConfig {
-            worker_id: 32,
-            worker_bits: 5,
+            worker_id: 256,
+            worker_bits: 8,
             ..IdGeneratorConfig::default()
         };
 
@@ -213,14 +222,14 @@ mod tests {
         assert!(matches!(
             error,
             IdError::WorkerIdOutOfRange {
-                worker_id: 32,
-                max_worker_id: 31,
-                worker_bits: 5
+                worker_id: 256,
+                max_worker_id: 255,
+                worker_bits: 8
             }
         ));
 
-        let generator = IdGenerator::for_worker(31).expect("max worker id should be accepted");
-        assert_eq!(generator.max_worker_id(), 31);
+        let generator = IdGenerator::for_worker(255).expect("max worker id should be accepted");
+        assert_eq!(generator.max_worker_id(), 255);
     }
 
     #[test]

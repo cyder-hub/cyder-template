@@ -5,7 +5,7 @@ import { createUser, deleteUser, listUsers, type User } from '@/services/users'
 const users = ref<User[]>([])
 const loading = ref(false)
 const saving = ref(false)
-const deletingId = ref<number | null>(null)
+const deletingId = ref<string | null>(null)
 const error = ref<string | null>(null)
 const name = ref('')
 const email = ref('')

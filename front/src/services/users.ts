@@ -1,7 +1,7 @@
 import { API_BASE, requestJson } from '@/services/http'
 
 export interface User {
-  id: number
+  id: string
   name: string
   email: string
   active: boolean
@@ -28,8 +28,8 @@ export function createUser(input: CreateUserRequest): Promise<User> {
   })
 }
 
-export function deleteUser(id: number): Promise<{ deleted: boolean }> {
-  return requestJson<{ deleted: boolean }>(`${USERS_PATH}/${id}`, {
+export function deleteUser(id: string): Promise<{ deleted: boolean }> {
+  return requestJson<{ deleted: boolean }>(`${USERS_PATH}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   })
 }
