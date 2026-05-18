@@ -28,8 +28,13 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: AppConfig) -> AppResult<Self> {
-        let database = database::DbPool::connect(&config.database_url, config.database_pool_size)?;
+    pub async fn new(config: AppConfig) -> AppResult<Self> {
+        let database_options = database::DbPoolOptions::new(
+            config.database_pool_size,
+            config.database_acquire_timeout_ms,
+            config.sqlite_busy_timeout_ms,
+        );
+        let database = database::DbPool::connect(&config.database_url, database_options).await?;
         let id_generator = IdGenerator::for_worker(config.id_worker_id)?;
 
         Ok(Self {
@@ -155,15 +160,16 @@ mod tests {
 
     use super::*;
 
-    fn test_state() -> AppState {
+    async fn test_state() -> AppState {
         AppState::new(AppConfig {
             database_url: ":memory:".to_string(),
             ..AppConfig::default()
         })
+        .await
         .expect("test app state should initialize")
     }
 
-    fn test_state_with_sqlite_file(file_name: &str) -> (tempfile::TempDir, AppState) {
+    async fn test_state_with_sqlite_file(file_name: &str) -> (tempfile::TempDir, AppState) {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
         let database_url = temp_dir
             .path()
@@ -176,6 +182,7 @@ mod tests {
             database_pool_size: 1,
             ..AppConfig::default()
         })
+        .await
         .expect("test app state should initialize");
 
         (temp_dir, state)
@@ -242,9 +249,9 @@ mod tests {
             .expect("json id should be a signed 64-bit integer string")
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn healthz_returns_ok() {
-        let response = build_app(test_state())
+        let response = build_app(test_state().await)
             .oneshot(
                 Request::builder()
                     .uri("/healthz")
@@ -257,9 +264,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn readyz_checks_database() {
-        let response = build_app(test_state())
+        let response = build_app(test_state().await)
             .oneshot(
                 Request::builder()
                     .uri("/readyz")
@@ -272,9 +279,9 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn items_api_creates_lists_reads_deletes_and_returns_404() {
-        let (_temp_dir, state) = test_state_with_sqlite_file("items-api.sqlite");
+        let (_temp_dir, state) = test_state_with_sqlite_file("items-api.sqlite").await;
         let app = build_app(state);
 
         let (status, body) = request_json(app.clone(), Method::GET, "/api/items", None).await;
@@ -330,9 +337,9 @@ mod tests {
         assert_eq!(missing["error"], "not_found");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn users_api_creates_lists_reads_deletes_and_returns_404() {
-        let (_temp_dir, state) = test_state_with_sqlite_file("users-api.sqlite");
+        let (_temp_dir, state) = test_state_with_sqlite_file("users-api.sqlite").await;
         let app = build_app(state);
 
         let (status, body) = request_json(app.clone(), Method::GET, "/api/users", None).await;
@@ -388,7 +395,7 @@ mod tests {
         assert_eq!(missing["error"], "not_found");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn frontend_history_routes_fallback_to_index_without_shadowing_api_404s() {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
         std::fs::write(temp_dir.path().join("index.html"), "<div id=\"app\"></div>")
@@ -399,6 +406,7 @@ mod tests {
             public_dir: temp_dir.path().to_string_lossy().into_owned(),
             ..AppConfig::default()
         })
+        .await
         .expect("test app state should initialize");
         let app = build_app(state);
 

@@ -7,8 +7,13 @@ port: 8000
 # postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template
 # use the PostgreSQL backend.
 database_url: .app/dev/db/cyder-template.sqlite
-# SQLite is the local default; use one connection to avoid write lock churn.
+# SQLite is the local default; keep one connection for the conservative local path.
+# File SQLite can use a larger pool for read concurrency; writes still serialize.
 database_pool_size: 1
+# Maximum time to wait for a pooled database connection.
+database_acquire_timeout_ms: 30000
+# SQLite busy timeout used by each SQLite connection when it waits on locks.
+sqlite_busy_timeout_ms: 5000
 
 # Snowflake worker id. Keep each running instance on a distinct value from 0 to 255.
 id_worker_id: 1

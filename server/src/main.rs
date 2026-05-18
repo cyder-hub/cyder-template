@@ -17,7 +17,7 @@ async fn main() -> AppResult<()> {
     init_tracing(&config.log_level)?;
 
     let address: SocketAddr = config.bind_address()?;
-    let state = app::AppState::new(config.clone())?;
+    let state = app::AppState::new(config.clone()).await?;
     let app = app::build_app(state);
     let listener = tokio::net::TcpListener::bind(address).await?;
 

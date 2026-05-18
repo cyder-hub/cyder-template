@@ -120,6 +120,17 @@ test: test-backend test-front
 test-backend:
 	cd '{{justfile_directory()}}' && cargo test -p cyder-template
 
+# Run PostgreSQL integration tests against an isolated test database.
+test-postgres:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	cd '{{justfile_directory()}}'
+	if [[ -z "${APP_TEST_POSTGRES_URL:-}" ]]; then
+	  echo "APP_TEST_POSTGRES_URL must point to an isolated PostgreSQL test database." >&2
+	  exit 2
+	fi
+	cargo test -p cyder-template postgres -- --ignored
+
 # Run frontend checks.
 test-front: front-ci-deps
 	npm --prefix '{{justfile_directory()}}/front' test

@@ -19,7 +19,7 @@ pub struct CreateItemInput {
     pub completed: Option<bool>,
 }
 
-pub fn create(
+pub async fn create(
     pool: &DbPool,
     id_generator: &IdGenerator,
     input: CreateItemInput,
@@ -34,19 +34,25 @@ pub fn create(
         updated_at: now,
     };
 
-    database::items::create(pool, item).map_err(AppError::from)
+    database::items::create(pool, item)
+        .await
+        .map_err(AppError::from)
 }
 
-pub fn list(pool: &DbPool) -> AppResult<Vec<Item>> {
-    database::items::list(pool).map_err(AppError::from)
+pub async fn list(pool: &DbPool) -> AppResult<Vec<Item>> {
+    database::items::list(pool).await.map_err(AppError::from)
 }
 
-pub fn get(pool: &DbPool, item_id: i64) -> AppResult<Option<Item>> {
-    database::items::get(pool, item_id).map_err(AppError::from)
+pub async fn get(pool: &DbPool, item_id: i64) -> AppResult<Option<Item>> {
+    database::items::get(pool, item_id)
+        .await
+        .map_err(AppError::from)
 }
 
-pub fn delete(pool: &DbPool, item_id: i64) -> AppResult<bool> {
-    database::items::delete(pool, item_id).map_err(AppError::from)
+pub async fn delete(pool: &DbPool, item_id: i64) -> AppResult<bool> {
+    database::items::delete(pool, item_id)
+        .await
+        .map_err(AppError::from)
 }
 
 fn now_millis() -> AppResult<i64> {
@@ -65,22 +71,27 @@ fn now_millis() -> AppResult<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{database::DbPool, id::IdGenerator};
+    use crate::{
+        database::{DbPool, DbPoolOptions},
+        id::IdGenerator,
+    };
 
-    fn sqlite_pool() -> (tempfile::TempDir, DbPool) {
+    async fn sqlite_pool() -> (tempfile::TempDir, DbPool) {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
         let database_url = temp_dir
             .path()
             .join("items.sqlite")
             .to_string_lossy()
             .into_owned();
-        let pool = DbPool::connect(&database_url, 1).expect("sqlite pool should initialize");
+        let pool = DbPool::connect(&database_url, DbPoolOptions::default())
+            .await
+            .expect("sqlite pool should initialize");
         (temp_dir, pool)
     }
 
-    #[test]
-    fn item_service_creates_lists_gets_and_deletes_items() {
-        let (_temp_dir, pool) = sqlite_pool();
+    #[tokio::test(flavor = "multi_thread")]
+    async fn item_service_creates_lists_gets_and_deletes_items() {
+        let (_temp_dir, pool) = sqlite_pool().await;
         let ids = IdGenerator::for_worker(2).expect("id generator should initialize");
 
         let created = create(
@@ -92,6 +103,7 @@ mod tests {
                 completed: Some(true),
             },
         )
+        .await
         .expect("item should be created");
 
         assert!(created.id > 0);
@@ -100,17 +112,25 @@ mod tests {
         assert!(created.completed);
         assert_eq!(created.created_at, created.updated_at);
 
-        let listed = list(&pool).expect("items should list");
+        let listed = list(&pool).await.expect("items should list");
         assert_eq!(listed, vec![created.clone()]);
 
-        let fetched = get(&pool, created.id).expect("item lookup should succeed");
+        let fetched = get(&pool, created.id)
+            .await
+            .expect("item lookup should succeed");
         assert_eq!(fetched, Some(created.clone()));
 
-        assert!(delete(&pool, created.id).expect("item should delete"));
+        assert!(delete(&pool, created.id).await.expect("item should delete"));
         assert_eq!(
-            get(&pool, created.id).expect("deleted item lookup should succeed"),
+            get(&pool, created.id)
+                .await
+                .expect("deleted item lookup should succeed"),
             None
         );
-        assert!(!delete(&pool, created.id).expect("missing item delete should succeed"));
+        assert!(
+            !delete(&pool, created.id)
+                .await
+                .expect("missing item delete should succeed")
+        );
     }
 }

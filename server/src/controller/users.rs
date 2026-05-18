@@ -40,9 +40,8 @@ pub struct DeleteUserResponse {
 }
 
 pub async fn list_users(State(state): State<AppState>) -> AppResult<Json<Vec<UserResponse>>> {
-    users::list(state.database())
-        .map(|users| users.into_iter().map(UserResponse::from).collect())
-        .map(Json)
+    let users = users::list(state.database()).await?;
+    Ok(Json(users.into_iter().map(UserResponse::from).collect()))
 }
 
 pub async fn create_user(
@@ -50,6 +49,7 @@ pub async fn create_user(
     Json(input): Json<CreateUserInput>,
 ) -> AppResult<Json<UserResponse>> {
     users::create(state.database(), state.id_generator(), input)
+        .await
         .map(UserResponse::from)
         .map(Json)
 }
@@ -59,7 +59,8 @@ pub async fn get_user(
     Path(user_id): Path<ApiId>,
 ) -> AppResult<Json<UserResponse>> {
     let user_id = user_id.into_i64();
-    users::get(state.database(), user_id)?
+    users::get(state.database(), user_id)
+        .await?
         .map(UserResponse::from)
         .map(Json)
         .ok_or(AppError::NotFound {
@@ -73,7 +74,7 @@ pub async fn delete_user(
     Path(user_id): Path<ApiId>,
 ) -> AppResult<Json<DeleteUserResponse>> {
     let user_id = user_id.into_i64();
-    let deleted = users::delete(state.database(), user_id)?;
+    let deleted = users::delete(state.database(), user_id).await?;
     if !deleted {
         return Err(AppError::NotFound {
             resource: "user",
