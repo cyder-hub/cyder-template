@@ -13,7 +13,7 @@ path = "src/main.rs"
 [dependencies]
 axum = { version = "0.8.8", features = ["macros"] }
 config = { version = "0.15.22", features = ["yaml"] }
-diesel = { version = "2.3.9", features = ["postgres", "returning_clauses_for_sqlite_3_35", "sqlite"] }
+diesel = { version = "2.3.10", features = ["postgres", "returning_clauses_for_sqlite_3_35", "sqlite"] }
 diesel-async = { version = "0.9.0", features = ["bb8", "migrations", "pool", "postgres", "sqlite"] }
 diesel_migrations = "2.3.2"
 libsqlite3-sys = { version = "0.37.0", features = ["bundled"] }
