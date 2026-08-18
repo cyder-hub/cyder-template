@@ -137,6 +137,10 @@ pub enum DbPool {
     Sqlite(SqlitePool),
 }
 
+#[expect(
+    clippy::large_enum_variant,
+    reason = "connections are immediately borrowed, while boxing PostgreSQL would allocate on every checkout"
+)]
 pub enum DbConnection<'a> {
     Postgres(PostgresPooledConnection<'a>),
     Sqlite(SqlitePooledConnection<'a>),

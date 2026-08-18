@@ -27,7 +27,7 @@ jobs:
       - name: Install Rust 1.94
         shell: bash
         run: |
-          rustup toolchain install 1.94.0 --profile minimal --component rustfmt
+          rustup toolchain install 1.94.0 --profile minimal --component rustfmt --component clippy
           rustup default 1.94.0
 
       - name: Install native build dependencies
@@ -50,8 +50,8 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --check
 
-      - name: Check backend
-        run: cargo check --workspace --locked
+      - name: Lint backend
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Test backend
         run: cargo test --workspace --locked

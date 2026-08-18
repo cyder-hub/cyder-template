@@ -18,7 +18,7 @@ Run the checks that match your change. For most code, dependency, CI, or Docker 
 
 ```bash
 cargo fmt --check
-cargo check --workspace --locked
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 npm --prefix front ci
 npm --prefix front test
@@ -34,7 +34,7 @@ The shorter project shortcut is:
 just check
 ```
 
-`just check` covers Rust formatting, backend check/tests, frontend tests, and frontend build. `just audit` separately validates security-exception metadata, Rust advisories/licenses/sources/bans, and high-or-critical npm advisories; it requires cargo-deny 0.20.2 and network access. The checked-in GitHub Actions workflows mirror the direct backend, frontend, security, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
+`just check` covers Rust formatting, strict backend lints/tests, frontend tests, and frontend build. `just audit` separately validates security-exception metadata, Rust advisories/licenses/sources/bans, and high-or-critical npm advisories; it requires cargo-deny 0.20.2 and network access. The checked-in GitHub Actions workflows mirror the direct backend, frontend, security, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
 
 When database changes affect persistence, include the relevant backend coverage in the pull request notes. SQLite changes should usually include `cargo test --workspace`, which covers file-backed SQLite migrations, readiness, and CRUD. PostgreSQL behavior is covered by the opt-in integration test against an isolated test database:
 
@@ -66,7 +66,7 @@ Dependency update pull requests should include the relevant lockfile changes and
 
 ```bash
 cargo fmt --manifest-path Cargo.toml --check
-cargo check --manifest-path Cargo.toml --workspace --locked
+cargo clippy --manifest-path Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --manifest-path Cargo.toml --workspace --locked
 npm --prefix front ci
 npm --prefix front test
