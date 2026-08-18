@@ -136,7 +136,7 @@ test-front: front-ci-deps
 	npm --prefix '{{justfile_directory()}}/front' test
 
 # Run the local aggregate verification suite.
-check: fmt-check check-backend test-backend test-front build-front
+check: fmt-check lint-backend test-backend test-front build-front
 
 # Audit locked dependencies and dependency policy.
 audit:
@@ -161,6 +161,10 @@ audit:
 # Check backend compilation without producing release artifacts.
 check-backend:
 	cd '{{justfile_directory()}}' && cargo check -p cyder-template
+
+# Run strict backend lints across every workspace target and feature.
+lint-backend:
+	cd '{{justfile_directory()}}' && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
 # Format Rust sources.
 fmt:

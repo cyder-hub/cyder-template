@@ -41,7 +41,7 @@ docker build -t your-project:ci -f Dockerfile .
 
 ## Requirements
 
-- Rust 1.94 or newer
+- Rust 1.94 or newer with the rustfmt and Clippy components
 - Node.js 24.11 or newer
 - npm
 - just
@@ -73,7 +73,8 @@ just front-ci-deps       # npm ci
 just build               # backend release binary and frontend dist
 just test                # backend tests and frontend type checks
 just test-postgres       # optional PostgreSQL integration tests
-just check               # fmt, check, tests, frontend build
+just lint-backend        # strict Rust lints for all targets/features
+just check               # fmt, strict lint, tests, frontend build
 just audit               # locked dependency advisories and policy
 just docker-build        # local Docker image build
 ```
@@ -228,7 +229,7 @@ Compose builds the same `cyder-template:local` image, starts a local PostgreSQL 
 
 This template includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
 
-- `Backend`: installs Rust 1.94 and native build dependencies, then runs Rust formatting, workspace check, and workspace tests.
+- `Backend`: installs Rust 1.94 with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
 - `Frontend`: uses Node 24, runs locked npm install, type checks through `npm test`, and builds the Vite app.
 - `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, and builds `cyder-template:ci`.
 
