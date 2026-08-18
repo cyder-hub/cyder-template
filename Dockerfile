@@ -21,7 +21,7 @@ RUN apt-get update \
 
 COPY Cargo.toml Cargo.lock ./
 COPY server/ server/
-RUN cargo build -p cyder-template --release
+RUN cargo build -p cyder-template --release --locked
 
 FROM debian:bookworm-slim AS runtime
 

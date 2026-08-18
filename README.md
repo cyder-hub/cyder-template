@@ -45,6 +45,7 @@ docker build -t your-project:ci -f Dockerfile .
 - Node.js 24.11 or newer
 - npm
 - just
+- cargo-deny 0.20.2 when running dependency security checks
 - Diesel CLI when you want to regenerate schema files
 - Docker when you want container builds or local PostgreSQL compose
 
@@ -73,8 +74,17 @@ just build               # backend release binary and frontend dist
 just test                # backend tests and frontend type checks
 just test-postgres       # optional PostgreSQL integration tests
 just check               # fmt, check, tests, frontend build
+just audit               # locked dependency advisories and policy
 just docker-build        # local Docker image build
 ```
+
+`just audit` requires `cargo-deny` 0.20.2 and registry access. Install the pinned version with:
+
+```bash
+cargo install --locked cargo-deny --version 0.20.2
+```
+
+Dependency security is intentionally separate from `just check` so normal local verification does not install tools or depend on advisory services. The Security workflow runs the same policies for every pull request and default-branch push, and once per day.
 
 The template `justfile` is for human development. CI and automation can call the same underlying Cargo, npm, and Docker commands directly.
 
