@@ -6,6 +6,7 @@ mod error;
 mod id;
 mod schema;
 mod service;
+mod shutdown;
 
 use std::net::SocketAddr;
 
@@ -14,10 +15,12 @@ use error::AppResult;
 #[tokio::main]
 async fn main() -> AppResult<()> {
     let config = config::AppConfig::load()?;
+    config.validate()?;
     init_tracing(&config.log_level)?;
 
     let address: SocketAddr = config.bind_address()?;
     let state = app::AppState::new(config.clone()).await?;
+    let lifecycle = state.lifecycle().clone();
     let app = app::build_app(state);
     let listener = tokio::net::TcpListener::bind(address).await?;
 
@@ -29,8 +32,7 @@ async fn main() -> AppResult<()> {
         "starting server"
     );
 
-    axum::serve(listener, app).await?;
-    Ok(())
+    shutdown::serve(listener, app, lifecycle, &config).await
 }
 
 fn init_tracing(log_level: &str) -> AppResult<()> {

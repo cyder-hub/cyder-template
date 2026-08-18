@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub id_worker_id: u64,
     pub log_level: String,
     pub public_dir: String,
+    pub shutdown_readiness_delay_ms: u64,
+    pub shutdown_timeout_ms: u64,
 }
 
 impl Default for AppConfig {
@@ -29,8 +31,23 @@ impl Default for AppConfig {
             id_worker_id: 1,
             log_level: "info".to_string(),
             public_dir: "front/dist".to_string(),
+            shutdown_readiness_delay_ms: 1_000,
+            shutdown_timeout_ms: 8_000,
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigValidationError {
+    #[error("shutdown_timeout_ms must be greater than 0")]
+    ZeroShutdownTimeout,
+    #[error(
+        "shutdown_readiness_delay_ms ({shutdown_readiness_delay_ms}) must be less than shutdown_timeout_ms ({shutdown_timeout_ms})"
+    )]
+    InvalidShutdownTiming {
+        shutdown_readiness_delay_ms: u64,
+        shutdown_timeout_ms: u64,
+    },
 }
 
 impl AppConfig {
@@ -48,7 +65,12 @@ impl AppConfig {
             .set_default("sqlite_busy_timeout_ms", defaults.sqlite_busy_timeout_ms)?
             .set_default("id_worker_id", defaults.id_worker_id)?
             .set_default("log_level", defaults.log_level)?
-            .set_default("public_dir", defaults.public_dir)?;
+            .set_default("public_dir", defaults.public_dir)?
+            .set_default(
+                "shutdown_readiness_delay_ms",
+                defaults.shutdown_readiness_delay_ms,
+            )?
+            .set_default("shutdown_timeout_ms", defaults.shutdown_timeout_ms)?;
 
         if let Some(config_path) = env::var_os("APP_CONFIG_PATH") {
             builder = builder.add_source(File::from(PathBuf::from(config_path)).required(false));
@@ -60,6 +82,21 @@ impl AppConfig {
             .add_source(app_environment_source())
             .build()?
             .try_deserialize()
+    }
+
+    pub fn validate(&self) -> Result<(), ConfigValidationError> {
+        if self.shutdown_timeout_ms == 0 {
+            return Err(ConfigValidationError::ZeroShutdownTimeout);
+        }
+
+        if self.shutdown_readiness_delay_ms >= self.shutdown_timeout_ms {
+            return Err(ConfigValidationError::InvalidShutdownTiming {
+                shutdown_readiness_delay_ms: self.shutdown_readiness_delay_ms,
+                shutdown_timeout_ms: self.shutdown_timeout_ms,
+            });
+        }
+
+        Ok(())
     }
 
     pub fn bind_address(&self) -> Result<SocketAddr, std::net::AddrParseError> {
@@ -108,6 +145,11 @@ mod tests {
         env.insert("APP_ID_WORKER_ID".to_string(), "3".to_string());
         env.insert("APP_LOG_LEVEL".to_string(), "debug".to_string());
         env.insert("APP_PUBLIC_DIR".to_string(), "front/dist".to_string());
+        env.insert(
+            "APP_SHUTDOWN_READINESS_DELAY_MS".to_string(),
+            "750".to_string(),
+        );
+        env.insert("APP_SHUTDOWN_TIMEOUT_MS".to_string(), "6000".to_string());
 
         let config: AppConfig = Config::builder()
             .add_source(app_environment_source().source(Some(env)))
@@ -125,6 +167,8 @@ mod tests {
         assert_eq!(config.id_worker_id, 3);
         assert_eq!(config.log_level, "debug");
         assert_eq!(config.public_dir, "front/dist");
+        assert_eq!(config.shutdown_readiness_delay_ms, 750);
+        assert_eq!(config.shutdown_timeout_ms, 6000);
     }
 
     #[test]
@@ -134,5 +178,46 @@ mod tests {
         assert_eq!(config.database_pool_size, 1);
         assert_eq!(config.database_acquire_timeout_ms, 30_000);
         assert_eq!(config.sqlite_busy_timeout_ms, 5_000);
+        assert_eq!(config.shutdown_readiness_delay_ms, 1_000);
+        assert_eq!(config.shutdown_timeout_ms, 8_000);
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn shutdown_timeout_must_be_positive() {
+        let config = AppConfig {
+            shutdown_readiness_delay_ms: 0,
+            shutdown_timeout_ms: 0,
+            ..AppConfig::default()
+        };
+
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigValidationError::ZeroShutdownTimeout)
+        ));
+    }
+
+    #[test]
+    fn readiness_delay_must_be_shorter_than_shutdown_timeout() {
+        let config = AppConfig {
+            shutdown_readiness_delay_ms: 1_000,
+            shutdown_timeout_ms: 1_000,
+            ..AppConfig::default()
+        };
+
+        assert!(matches!(
+            config.validate(),
+            Err(ConfigValidationError::InvalidShutdownTiming { .. })
+        ));
+    }
+
+    #[test]
+    fn readiness_delay_can_be_disabled() {
+        let config = AppConfig {
+            shutdown_readiness_delay_ms: 0,
+            ..AppConfig::default()
+        };
+
+        assert!(config.validate().is_ok());
     }
 }

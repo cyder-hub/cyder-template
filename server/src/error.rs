@@ -18,6 +18,11 @@ pub enum AppError {
         #[from]
         source: config::ConfigError,
     },
+    #[error("invalid configuration: {source}")]
+    ConfigValidation {
+        #[from]
+        source: crate::config::ConfigValidationError,
+    },
     #[error("invalid bind address: {source}")]
     BindAddress {
         #[from]
@@ -47,6 +52,12 @@ pub enum AppError {
     NotFound { resource: &'static str, id: i64 },
     #[error("readiness check failed: {message}")]
     Readiness { message: String },
+    #[error("failed to install shutdown signal handler: {source}")]
+    ShutdownSignal { source: std::io::Error },
+    #[error("graceful shutdown timed out after {timeout_ms} ms")]
+    ShutdownTimeout { timeout_ms: u64 },
+    #[error("graceful shutdown was forced by a second {signal} signal")]
+    ShutdownForced { signal: &'static str },
     #[error("{message}")]
     Internal { message: String },
 }
@@ -67,11 +78,16 @@ impl AppError {
         match self {
             AppError::Readiness { .. } => StatusCode::SERVICE_UNAVAILABLE,
             AppError::NotFound { .. } => StatusCode::NOT_FOUND,
-            AppError::Config { .. } | AppError::BindAddress { .. } => StatusCode::BAD_REQUEST,
+            AppError::Config { .. }
+            | AppError::ConfigValidation { .. }
+            | AppError::BindAddress { .. } => StatusCode::BAD_REQUEST,
             AppError::Server { .. }
             | AppError::DatabaseInit { .. }
             | AppError::Database { .. }
             | AppError::Id { .. }
+            | AppError::ShutdownSignal { .. }
+            | AppError::ShutdownTimeout { .. }
+            | AppError::ShutdownForced { .. }
             | AppError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
@@ -79,6 +95,7 @@ impl AppError {
     fn error_code(&self) -> &'static str {
         match self {
             AppError::Config { .. } => "config_error",
+            AppError::ConfigValidation { .. } => "config_validation_error",
             AppError::BindAddress { .. } => "bind_address_error",
             AppError::Server { .. } => "server_error",
             AppError::DatabaseInit { .. } => "database_init_error",
@@ -86,6 +103,9 @@ impl AppError {
             AppError::Id { .. } => "id_error",
             AppError::NotFound { .. } => "not_found",
             AppError::Readiness { .. } => "readiness_failed",
+            AppError::ShutdownSignal { .. } => "shutdown_signal_error",
+            AppError::ShutdownTimeout { .. } => "shutdown_timeout",
+            AppError::ShutdownForced { .. } => "shutdown_forced",
             AppError::Internal { .. } => "internal_error",
         }
     }

@@ -24,11 +24,24 @@ pub struct ReadyResponse {
 }
 
 pub async fn readyz(State(state): State<AppState>) -> AppResult<Json<ReadyResponse>> {
-    let database = database::check_readiness(state.database()).await?;
+    ensure_accepting_traffic(&state)?;
+    let database = database::check_readiness(state.database()).await;
+    ensure_accepting_traffic(&state)?;
+    let database = database?;
 
     Ok(Json(ReadyResponse {
         status: "ready",
         service: crate::app::APP_NAME,
         database,
     }))
+}
+
+fn ensure_accepting_traffic(state: &AppState) -> AppResult<()> {
+    if state.lifecycle().is_ready() {
+        Ok(())
+    } else {
+        Err(crate::error::AppError::Readiness {
+            message: "service is shutting down".to_string(),
+        })
+    }
 }

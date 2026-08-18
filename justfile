@@ -177,3 +177,7 @@ fmt-check:
 # Build the local Docker image.
 docker-build image="cyder-template:local":
 	cd '{{justfile_directory()}}' && docker build -t "{{image}}" -f Dockerfile .
+
+# Verify graceful SIGTERM handling in an already-built container image.
+test-container-shutdown image="cyder-template:local":
+	bash '{{justfile_directory()}}/scripts/test-container-shutdown.sh' "{{image}}"
