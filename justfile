@@ -138,6 +138,26 @@ test-front: front-ci-deps
 # Run the local aggregate verification suite.
 check: fmt-check check-backend test-backend test-front build-front
 
+# Audit locked dependencies and dependency policy.
+audit:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	required_version="0.20.2"
+	if ! installed_version="$(cargo deny --version 2>/dev/null)"; then
+	  echo "cargo-deny ${required_version} is required." >&2
+	  echo "Install it with: cargo install --locked cargo-deny --version ${required_version}" >&2
+	  exit 2
+	fi
+	if [[ "$installed_version" != "cargo-deny ${required_version}" ]]; then
+	  echo "cargo-deny ${required_version} is required; found: ${installed_version}" >&2
+	  echo "Install it with: cargo install --locked cargo-deny --version ${required_version}" >&2
+	  exit 2
+	fi
+	node '{{justfile_directory()}}/scripts/validate-security-exceptions.mjs'
+	cd '{{justfile_directory()}}'
+	cargo deny --locked check
+	npm --prefix front audit --package-lock-only --audit-level=high
+
 # Check backend compilation without producing release artifacts.
 check-backend:
 	cd '{{justfile_directory()}}' && cargo check -p cyder-template

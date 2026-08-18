@@ -7,12 +7,13 @@
 Commands run:
 
 - [ ] `cargo fmt --check`
-- [ ] `cargo check --workspace`
-- [ ] `cargo test --workspace`
+- [ ] `cargo check --workspace --locked`
+- [ ] `cargo test --workspace --locked`
 - [ ] `APP_TEST_POSTGRES_URL=... just test-postgres` (database changes that affect PostgreSQL)
 - [ ] `npm --prefix front ci`
 - [ ] `npm --prefix front test`
 - [ ] `npm --prefix front run build`
+- [ ] `just audit`
 - [ ] `docker compose -f docker-compose.yml config`
 - [ ] `docker build -t cyder-template:ci -f Dockerfile .`
 - [ ] Not run; reason:
