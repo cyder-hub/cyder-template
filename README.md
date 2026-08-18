@@ -77,6 +77,7 @@ just lint-backend        # strict Rust lints for all targets/features
 just check               # fmt, strict lint, tests, frontend build
 just audit               # locked dependency advisories and policy
 just docker-build        # local Docker image build
+just test-container-shutdown # graceful SIGTERM test for the local image
 ```
 
 `just audit` requires `cargo-deny` 0.20.2 and registry access. Install the pinned version with:
@@ -111,6 +112,8 @@ APP_SQLITE_BUSY_TIMEOUT_MS=5000
 APP_ID_WORKER_ID=1
 APP_LOG_LEVEL=info
 APP_PUBLIC_DIR=front/dist
+APP_SHUTDOWN_READINESS_DELAY_MS=1000
+APP_SHUTDOWN_TIMEOUT_MS=8000
 ```
 
 Copy `.env.example` to `.env` when you want `just` recipes to load local overrides automatically.
@@ -159,7 +162,7 @@ See `server/diesel.toml` for the Diesel CLI commands used to regenerate each sch
 Health endpoints:
 
 - `GET /healthz` checks that the process is alive.
-- `GET /readyz` checks database connectivity.
+- `GET /readyz` checks that the service accepts traffic and that its database is connected.
 
 Example resources:
 
@@ -180,6 +183,20 @@ ID boundary convention:
 - Frontend resource types use `string` for IDs and pass those strings back in URLs.
 
 This keeps database indexes and backend arithmetic efficient while avoiding JavaScript 64-bit integer precision loss in browser clients.
+
+## Graceful Shutdown
+
+The backend handles SIGTERM on Unix and Ctrl-C on every supported platform. After receiving the first signal, it immediately makes `/readyz` return `503` while `/healthz` remains available. Normal requests continue during the default 1-second readiness propagation delay. The listener then stops accepting new connections and Axum waits for in-flight requests to finish.
+
+`APP_SHUTDOWN_TIMEOUT_MS` is the total budget from signal receipt, including `APP_SHUTDOWN_READINESS_DELAY_MS`. The defaults are `8000` and `1000` milliseconds respectively. The readiness delay may be `0`, but it must remain shorter than the positive total timeout; invalid values fail startup. A second signal or an expired deadline forces shutdown and returns a non-zero process status.
+
+Keep the container runtime or orchestrator termination deadline longer than `APP_SHUTDOWN_TIMEOUT_MS`. Docker sends SIGTERM and allows 10 seconds by default, so the built-in application values work without extra Dockerfile or Compose settings. Deployments with slower readiness propagation or longer requests can override the application values and their outer termination deadline together.
+
+Shutdown logs expose stable `shutdown_signal_received`, `shutdown_readiness_disabled`, `shutdown_drain_started`, `shutdown_completed`, and `shutdown_forced` event fields. To verify an already-built local image with a real SIGTERM:
+
+```bash
+just test-container-shutdown
+```
 
 ## Frontend
 
@@ -231,7 +248,7 @@ This template includes `.github/workflows/ci.yml`. The workflow runs on pull req
 
 - `Backend`: installs Rust 1.94 with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
 - `Frontend`: uses Node 24, runs locked npm install, type checks through `npm test`, and builds the Vite app.
-- `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, and builds `cyder-template:ci`.
+- `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, builds `cyder-template:ci`, then starts it and verifies graceful SIGTERM handling within Docker's default stop deadline.
 
 When renaming the template, update the workflow's Docker image tag together with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Node should stay on the 24.x line across local development and automation, with 24.11 or newer as the minimum.
 

@@ -19,3 +19,9 @@ sqlite_busy_timeout_ms: 5000
 id_worker_id: 1
 log_level: info
 public_dir: front/dist
+
+# On SIGTERM or Ctrl-C, fail readiness for this long before connection draining.
+# Set to 0 when an external pre-stop hook already handles traffic propagation.
+shutdown_readiness_delay_ms: 1000
+# Total budget from signal receipt, including the readiness delay above.
+shutdown_timeout_ms: 8000

@@ -15,6 +15,7 @@ use crate::{
     controller, database,
     error::{AppResult, ErrorResponse},
     id::IdGenerator,
+    shutdown::Lifecycle,
 };
 
 pub const APP_NAME: &str = "cyder-template";
@@ -23,6 +24,7 @@ pub const APP_NAME: &str = "cyder-template";
 pub struct AppState {
     config: Arc<AppConfig>,
     database: database::DbPool,
+    lifecycle: Lifecycle,
     #[allow(dead_code)]
     id_generator: Arc<IdGenerator>,
 }
@@ -40,6 +42,7 @@ impl AppState {
         Ok(Self {
             config: Arc::new(config),
             database,
+            lifecycle: Lifecycle::new(),
             id_generator: Arc::new(id_generator),
         })
     }
@@ -50,6 +53,10 @@ impl AppState {
 
     pub fn database(&self) -> &database::DbPool {
         &self.database
+    }
+
+    pub fn lifecycle(&self) -> &Lifecycle {
+        &self.lifecycle
     }
 
     #[allow(dead_code)]
@@ -277,6 +284,33 @@ mod tests {
             .expect("ready request should succeed");
 
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn shutdown_disables_readiness_but_keeps_liveness() {
+        let state = test_state().await;
+        state.lifecycle().begin_shutdown();
+        let app = build_app(state);
+
+        let (status, body) = request_json(app.clone(), Method::GET, "/readyz", None).await;
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            body,
+            json!({
+                "error": "readiness_failed",
+                "message": "readiness check failed: service is shutting down"
+            })
+        );
+
+        let (status, body) = request_json(app, Method::GET, "/healthz", None).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body,
+            json!({
+                "status": "ok",
+                "service": APP_NAME
+            })
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

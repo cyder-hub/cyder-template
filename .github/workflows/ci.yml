@@ -95,3 +95,6 @@ jobs:
 
       - name: Build image
         run: docker build -t cyder-template:ci -f Dockerfile .
+
+      - name: Test graceful container shutdown
+        run: bash scripts/test-container-shutdown.sh cyder-template:ci
