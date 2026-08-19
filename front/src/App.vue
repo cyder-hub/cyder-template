@@ -1,8 +1,10 @@
 <script setup lang="ts">
 const navItems = [
   { label: 'Dashboard', to: '/' },
+  // template-example:start
   { label: 'Items', to: '/items' },
   { label: 'Users', to: '/users' },
+  // template-example:end
 ]
 </script>
 

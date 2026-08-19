@@ -77,6 +77,7 @@ pub fn build_app(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(controller::health::healthz))
         .route("/readyz", get(controller::health::readyz))
+        // template-example:start
         .route(
             "/api/items",
             get(controller::items::list_items).post(controller::items::create_item),
@@ -93,6 +94,7 @@ pub fn build_app(state: AppState) -> Router {
             "/api/users/{id}",
             get(controller::users::get_user).delete(controller::users::delete_user),
         )
+        // template-example:end
         .route("/api", any(api_not_found))
         .route("/api/", any(api_not_found))
         .route("/api/{*path}", any(api_not_found))
@@ -176,6 +178,7 @@ mod tests {
         .expect("test app state should initialize")
     }
 
+    // template-example:start
     async fn test_state_with_sqlite_file(file_name: &str) -> (tempfile::TempDir, AppState) {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
         let database_url = temp_dir
@@ -194,6 +197,7 @@ mod tests {
 
         (temp_dir, state)
     }
+    // template-example:end
 
     async fn request_json(
         app: Router,
@@ -249,12 +253,14 @@ mod tests {
         (status, String::from_utf8_lossy(&bytes).into_owned())
     }
 
+    // template-example:start
     fn json_id_as_i64(value: &Value) -> i64 {
         value
             .as_str()
             .and_then(|id| id.parse::<i64>().ok())
             .expect("json id should be a signed 64-bit integer string")
     }
+    // template-example:end
 
     #[tokio::test(flavor = "multi_thread")]
     async fn healthz_returns_ok() {
@@ -313,6 +319,7 @@ mod tests {
         );
     }
 
+    // template-example:start
     #[tokio::test(flavor = "multi_thread")]
     async fn items_api_creates_lists_reads_deletes_and_returns_404() {
         let (_temp_dir, state) = test_state_with_sqlite_file("items-api.sqlite").await;
@@ -428,6 +435,7 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND, "missing body: {missing}");
         assert_eq!(missing["error"], "not_found");
     }
+    // template-example:end
 
     #[tokio::test(flavor = "multi_thread")]
     async fn frontend_history_routes_fallback_to_index_without_shadowing_api_404s() {
@@ -444,7 +452,7 @@ mod tests {
         .expect("test app state should initialize");
         let app = build_app(state);
 
-        let (status, body) = request_text(app.clone(), "/items").await;
+        let (status, body) = request_text(app.clone(), "/dashboard").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body, "<div id=\"app\"></div>");
 

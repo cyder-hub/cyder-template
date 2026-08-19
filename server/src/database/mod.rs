@@ -1,5 +1,7 @@
+// template-example:start
 pub mod items;
 pub mod users;
+// template-example:end
 
 use std::{
     fs::File,
@@ -22,6 +24,8 @@ use serde::Serialize;
 
 use crate::error::{AppError, AppResult};
 
+// The initializer uses an equivalent path spelling after removing example
+// migrations so Diesel's proc macro cannot reuse a stale expansion.
 const SQLITE_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/sqlite");
 const POSTGRES_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/postgres");
 static SQLITE_MEMORY_DATABASE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -487,21 +491,17 @@ fn sqlite_connection_url(database_url: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diesel::sql_types::{BigInt, Text};
+    // template-example:start
+    use diesel::sql_types::Text;
     use diesel_async::RunQueryDsl;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[derive(QueryableByName)]
-    struct CountRow {
-        #[diesel(sql_type = BigInt)]
-        count: i64,
-    }
 
     #[derive(QueryableByName)]
     struct JournalModeRow {
         #[diesel(sql_type = Text)]
         journal_mode: String,
     }
+    // template-example:end
 
     #[test]
     fn database_kind_detects_postgres_urls() {
@@ -520,7 +520,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn sqlite_pool_creates_file_runs_migrations_and_checks_readiness() {
+    async fn sqlite_pool_creates_file_and_checks_readiness() {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
         let database_url = temp_dir
             .path()
@@ -537,25 +537,6 @@ mod tests {
 
         let health = check_readiness(&pool).await.expect("readiness should pass");
         assert!(health.connected);
-
-        let mut conn = match pool.get().await.expect("sqlite connection should checkout") {
-            DbConnection::Sqlite(conn) => conn,
-            DbConnection::Postgres(_) => unreachable!("sqlite pool should use sqlite"),
-        };
-
-        let item_count = diesel::sql_query("SELECT COUNT(*) AS count FROM items")
-            .get_result::<CountRow>(&mut conn)
-            .await
-            .map(|row| row.count)
-            .expect("items table should exist");
-        assert_eq!(item_count, 0);
-
-        let user_count = diesel::sql_query("SELECT COUNT(*) AS count FROM users")
-            .get_result::<CountRow>(&mut conn)
-            .await
-            .map(|row| row.count)
-            .expect("users table should exist");
-        assert_eq!(user_count, 0);
     }
 
     #[test]
@@ -572,6 +553,7 @@ mod tests {
         assert_eq!(effective_sqlite_pool_size(".app/dev/db.sqlite", 4), 4);
     }
 
+    // template-example:start
     #[tokio::test(flavor = "multi_thread")]
     async fn sqlite_memory_pool_keeps_migrations_visible() {
         let pool = DbPool::connect(":memory:", DbPoolOptions::new(4, 500, 5_000))
@@ -600,7 +582,9 @@ mod tests {
             vec![created]
         );
     }
+    // template-example:end
 
+    // template-example:start
     #[tokio::test(flavor = "multi_thread")]
     async fn sqlite_memory_pool_preserves_schema_after_reaper_interval() {
         let sqlite_pool = init_sqlite_pool_with_reaper_config(
@@ -639,7 +623,9 @@ mod tests {
             vec![created]
         );
     }
+    // template-example:end
 
+    // template-example:start
     #[tokio::test(flavor = "multi_thread")]
     async fn sqlite_file_pool_with_multiple_connections_runs_concurrent_crud_and_readiness() {
         let temp_dir = tempfile::tempdir().expect("temp dir should be created");
@@ -703,7 +689,26 @@ mod tests {
         assert!(deleted_fourth.expect("fourth item should delete"));
         assert!(!deleted_missing.expect("missing item delete should succeed"));
     }
+    // template-example:end
 
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "requires APP_TEST_POSTGRES_URL pointing at an isolated PostgreSQL test database"]
+    async fn postgres_pool_connects_and_checks_readiness() {
+        let database_url = std::env::var("APP_TEST_POSTGRES_URL")
+            .expect("APP_TEST_POSTGRES_URL must point at an isolated PostgreSQL test database");
+        let pool = DbPool::connect(&database_url, DbPoolOptions::new(4, 2_000, 5_000))
+            .await
+            .expect("postgres pool should initialize");
+
+        assert_eq!(pool.kind(), DatabaseKind::Postgres);
+        assert!(
+            check_readiness(&pool)
+                .await
+                .expect("postgres readiness should pass")
+                .connected
+        );
+    }
+    // template-example:start
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "requires APP_TEST_POSTGRES_URL pointing at an isolated PostgreSQL test database"]
     async fn postgres_pool_with_multiple_connections_runs_crud_and_readiness() {
@@ -857,4 +862,5 @@ mod tests {
             updated_at: id,
         }
     }
+    // template-example:end
 }

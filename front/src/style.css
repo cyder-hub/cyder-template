@@ -163,6 +163,7 @@ a {
   opacity: 0.6;
 }
 
+/* template-example:start */
 .secondary-button--compact {
   min-height: 34px;
   padding: 0 10px;
@@ -188,10 +189,18 @@ a {
   cursor: not-allowed;
   opacity: 0.6;
 }
+/* template-example:end */
 
-.status-panel,
+/* template-example:start */
 .resource-section,
 .data-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+/* template-example:end */
+
+.status-panel {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #ffffff;
@@ -260,6 +269,7 @@ a {
   font-size: 13px;
 }
 
+/* template-example:start */
 .section-heading {
   padding: 18px;
   border-bottom: 1px solid #f3f4f6;
@@ -568,6 +578,7 @@ a {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
 }
+/* template-example:end */
 
 @media (min-width: 640px) {
   .app-page {
@@ -588,6 +599,7 @@ a {
     border-bottom: 0;
   }
 
+  /* template-example:start */
   .resource-row {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
@@ -601,6 +613,7 @@ a {
   .form-field--wide {
     grid-column: 1 / -1;
   }
+  /* template-example:end */
 }
 
 @media (min-width: 900px) {
@@ -628,6 +641,7 @@ a {
     padding: 40px 32px 64px;
   }
 
+  /* template-example:start */
   .table-wrapper {
     display: block;
     overflow-x: auto;
@@ -636,4 +650,5 @@ a {
   .mobile-record-list {
     display: none;
   }
+  /* template-example:end */
 }

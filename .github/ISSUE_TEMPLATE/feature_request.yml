@@ -1,17 +1,17 @@
-name: Template improvement
-description: Suggest a generic improvement to the template.
-title: "[Improvement]: "
+name: Feature request
+description: Suggest an improvement to the project.
+title: "[Feature]: "
 labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for reusable template improvements, not application-specific product requirements.
+        Describe an improvement that would make the project more useful or reliable.
   - type: textarea
     id: goal
     attributes:
       label: Goal
-      description: What should the template make easier or safer?
+      description: What should the project make easier or safer?
     validations:
       required: true
   - type: textarea

@@ -5,7 +5,9 @@ mod database;
 mod error;
 mod id;
 mod schema;
+// template-example:start
 mod service;
+// template-example:end
 mod shutdown;
 
 use std::net::SocketAddr;
