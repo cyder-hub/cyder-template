@@ -26,14 +26,21 @@ just init my-api
 ```
 
 Automation can call `node scripts/init-project.mjs --answers-file <path>` with a reviewed JSON answer file. The human-facing `just init` command intentionally keeps these details inside the wizard.
+
+After initialization, prepare and start the project with:
+
+```bash
+just bootstrap
+just dev
+```
 <!-- template-init:end -->
 
 ## Requirements
 
-- Rust 1.94 or newer with the rustfmt and Clippy components
-- Node.js 24.11 or newer
-- npm
-- just
+- Rust 1.97.1 through rustup, with the rustfmt and Clippy components declared in `rust-toolchain.toml`
+- Node.js 24.19.0, declared in `.node-version`
+- npm 11.17.0, bundled with the pinned Node.js release
+- just 1.58.0 or newer on the 1.x release line
 - cargo-deny 0.20.2 when running dependency security checks
 - Diesel CLI when you want to regenerate schema files
 - Docker when you want container builds or local PostgreSQL compose
@@ -41,9 +48,11 @@ Automation can call `node scripts/init-project.mjs --answers-file <path>` with a
 ## Quick Start
 
 ```bash
-npm --prefix front ci
+just bootstrap
 just dev
 ```
+
+`just bootstrap` checks the required toolchain and local ports, installs the locked frontend dependencies with `npm ci`, creates `.app/dev/db`, and creates `.env` from `.env.example` only when `.env` is absent. It never overwrites an existing local environment file. Docker and its Compose plugin are optional for the default SQLite path, so unavailable container tooling is reported as a warning.
 
 `just dev` starts the backend on `127.0.0.1:8000` and the Vite dev server for the Vue frontend. When `APP_DATA_DIR` is not set, the backend uses `.app/dev` and creates the SQLite database at `.app/dev/db/cyder-template.sqlite`.
 
@@ -54,16 +63,18 @@ Open the Vite URL printed by `npm run dev`. The frontend proxies `/api`, `/healt
 Run `just --list` to see the command surface.
 
 ```bash
+just doctor              # toolchain, optional Docker, and port diagnostics
+just bootstrap           # locked frontend deps and local files
 just dev                 # backend and frontend dev servers
 just dev-backend         # backend only
 just dev-front           # frontend only
-just install-front-deps  # npm install when package files changed
+just install-front-deps  # npm ci when package files changed
 just front-ci-deps       # npm ci
 just build               # backend release binary and frontend dist
 just test                # backend tests and frontend type checks
 just test-postgres       # optional PostgreSQL integration tests
 just lint-backend        # strict Rust lints for all targets/features
-just check               # fmt, strict lint, tests, frontend build
+just check               # toolchain contracts, fmt, lint, tests, build
 just audit               # locked dependency advisories and policy
 just docker-build        # local Docker image build
 just test-container-shutdown # graceful SIGTERM test for the local image
@@ -80,6 +91,8 @@ cargo install --locked cargo-deny --version 0.20.2
 ```
 
 Dependency security is intentionally separate from `just check` so normal local verification does not install tools or depend on advisory services. The Security workflow runs the same policies for every pull request and default-branch push, and once per day.
+
+`just doctor` never installs tools. Rust, Node.js, npm, just, and the backend port are blocking checks. Docker/Compose availability and the default Vite and PostgreSQL ports are advisory because they are not required by the default SQLite development path. cargo-deny and Diesel CLI retain checks in the commands that actually need them.
 
 The `justfile` is for human development. CI and automation can call the same underlying Cargo, npm, and Docker commands directly.
 
@@ -109,7 +122,7 @@ APP_SHUTDOWN_READINESS_DELAY_MS=1000
 APP_SHUTDOWN_TIMEOUT_MS=8000
 ```
 
-Copy `.env.example` to `.env` when you want `just` recipes to load local overrides automatically.
+`just bootstrap` copies `.env.example` to `.env` when the local file is absent. You can also copy it manually; `just` recipes load `.env` overrides automatically.
 
 ## Databases
 
@@ -241,11 +254,11 @@ Compose builds the same `cyder-template:local` image, starts a local PostgreSQL 
 
 This repository includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
 
-- `Backend`: installs Rust 1.94 with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
-- `Frontend`: uses Node 24, runs locked npm install, type checks through `npm test`, and builds the Vite app.
+- `Backend`: activates Rust 1.97.1 from `rust-toolchain.toml` with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
+- `Frontend`: reads Node 24.19.0 from `.node-version`, checks the toolchain/bootstrap contracts, runs locked npm install, type checks through `npm test`, and builds the Vite app.
 - `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, builds `cyder-template:ci`, then starts it and verifies graceful SIGTERM handling within Docker's default stop deadline.
 
-Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Node should stay on the 24.x line across local development and automation, with 24.11 or newer as the minimum.
+Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Update `.node-version`, `rust-toolchain.toml`, package metadata, and Docker build arguments together; `just test-toolchain` rejects version drift.
 
 ## License
 

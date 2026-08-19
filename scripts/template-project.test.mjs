@@ -270,6 +270,7 @@ test('initializes a renamed project while keeping examples', () => {
     assert.match(repeat.stdout, /already initialized/)
 
     if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
+      run('just', ['bootstrap'], { cwd: fixture.repository })
       run('just', ['check'], {
         cwd: fixture.repository,
         env: { CARGO_TARGET_DIR: INTEGRATION_CARGO_TARGET },
@@ -299,6 +300,7 @@ test('initializes a renamed project and strips examples', () => {
     assertInitializedFixture(fixture, answers)
 
     if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
+      run('just', ['bootstrap'], { cwd: fixture.repository })
       run('just', ['check'], {
         cwd: fixture.repository,
         env: { CARGO_TARGET_DIR: INTEGRATION_CARGO_TARGET },

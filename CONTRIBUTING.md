@@ -6,13 +6,14 @@ This repository is a GitHub template for a Rust backend and Vue frontend. Contri
 
 ## Local Setup
 
-Install the versions listed in `README.md`, then install frontend dependencies:
+Install the versions listed in `README.md`, then diagnose and prepare the checkout:
 
 ```bash
-npm --prefix front ci
+just doctor
+just bootstrap
 ```
 
-Use `just --list` to inspect the local command surface.
+`just bootstrap` uses `npm ci`, creates the ignored local data directory, and creates `.env` only when it does not already exist. It does not install global tools or start services. Use `just --list` to inspect the local command surface.
 
 ## Verification
 
@@ -22,6 +23,7 @@ Run the checks that match your change. For most code, dependency, CI, or Docker 
 cargo fmt --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
+node --test scripts/toolchain.test.mjs
 npm --prefix front ci
 npm --prefix front test
 npm --prefix front run build
@@ -36,7 +38,7 @@ The shorter project shortcut is:
 just check
 ```
 
-`just check` covers Rust formatting, strict backend lints/tests, frontend tests, and frontend build. `just audit` separately validates security-exception metadata, Rust advisories/licenses/sources/bans, and high-or-critical npm advisories; it requires cargo-deny 0.20.2 and network access. The checked-in GitHub Actions workflows mirror the direct backend, frontend, security, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
+`just check` covers toolchain/bootstrap contracts, Rust formatting, strict backend lints/tests, frontend tests, and frontend build. `just audit` separately validates security-exception metadata, Rust advisories/licenses/sources/bans, and high-or-critical npm advisories; it requires cargo-deny 0.20.2 and network access. The checked-in GitHub Actions workflows mirror the direct backend, frontend, security, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
 
 When database changes affect persistence, include the relevant backend coverage in the pull request notes. SQLite changes should usually include `cargo test --workspace`, which covers file-backed SQLite migrations, readiness, and CRUD. PostgreSQL behavior is covered by the opt-in integration test against an isolated test database:
 

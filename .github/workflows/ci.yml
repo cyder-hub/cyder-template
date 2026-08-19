@@ -25,17 +25,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.94
+      - name: Activate pinned Rust toolchain
         shell: bash
         run: |
-          rustup toolchain install 1.94.0 --profile minimal --component rustfmt --component clippy
-          rustup default 1.94.0
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
 
       # template-init:start
-      - name: Set up Node 24 for template initialization
+      - name: Set up pinned Node for template initialization
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version-file: .node-version
 
       - name: Initialize retained-example project
         env:
@@ -86,12 +89,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Node 24
+      - name: Set up pinned Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: front/package-lock.json
+
+      - name: Test toolchain and bootstrap contracts
+        working-directory: .
+        run: node --test scripts/toolchain.test.mjs
 
       # template-init:start
       - name: Test template initialization contract
@@ -127,16 +134,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # template-init:start
-      - name: Set up Node 24 for template initialization
+      - name: Set up pinned Node for template initialization
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version-file: .node-version
 
-      - name: Install Rust 1.94 for template initialization
+      - name: Activate pinned Rust toolchain for template initialization
         shell: bash
         run: |
-          rustup toolchain install 1.94.0 --profile minimal
-          rustup default 1.94.0
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
 
       - name: Initialize stripped-example project
         env:
