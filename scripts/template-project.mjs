@@ -26,7 +26,7 @@ const TEMPLATE_MARKER_FILES = new Map([
   ['README.md', 1],
   ['CONTRIBUTING.md', 2],
   ['justfile', 1],
-  ['.github/workflows/ci.yml', 1],
+  ['.github/workflows/ci.yml', 3],
 ])
 
 const EXAMPLE_MARKER_FILES = new Map([
@@ -44,7 +44,10 @@ const EXAMPLE_MARKER_FILES = new Map([
   ['front/src/style.css', 5],
 ])
 
-const TEMPLATE_ONLY_FILES = ['scripts/template-project.test.mjs']
+const TEMPLATE_ONLY_FILES = [
+  '.github/workflows/template-integration.yml',
+  'scripts/template-project.test.mjs',
+]
 
 const EXAMPLE_FILES = [
   'front/src/pages/Items.vue',
@@ -742,12 +745,12 @@ function validateWrittenProject(root, expectedState) {
   }
 
   const tracked = trackedFiles(root)
-  if (
-    state.status === 'initialized' &&
-    tracked.includes('scripts/template-project.test.mjs') &&
-    existsSync(join(root, 'scripts/template-project.test.mjs'))
-  ) {
-    fail('template-only tests were not removed')
+  if (state.status === 'initialized') {
+    for (const path of TEMPLATE_ONLY_FILES) {
+      if (tracked.includes(path) && existsSync(join(root, path))) {
+        fail(`template-only file was not removed: ${path}`)
+      }
+    }
   }
   if (state.examples === 'stripped') {
     for (const path of EXAMPLE_FILES) {

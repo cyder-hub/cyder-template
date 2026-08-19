@@ -32,10 +32,9 @@ const SOURCE_IDENTITY = {
   displayName: 'cyder-template',
   githubRepository: 'cyder-hub/cyder-template',
 }
-const KEPT_CARGO_TARGET = join(testing.PROJECT_ROOT, 'target/template-project-integration/kept')
-const STRIPPED_CARGO_TARGET = join(
+const INTEGRATION_CARGO_TARGET = join(
   testing.PROJECT_ROOT,
-  'target/template-project-integration/stripped',
+  'target/template-project-integration/shared',
 )
 
 function run(commandName, args, options = {}) {
@@ -171,7 +170,16 @@ function assertInitializedFixture(fixture, expected) {
     ]),
     [],
   )
-  assert.equal(existsSync(join(fixture.repository, 'scripts/template-project.test.mjs')), false)
+  for (const path of testing.TEMPLATE_ONLY_FILES) {
+    assert.equal(existsSync(join(fixture.repository, path)), false, path)
+  }
+  const workflow = readFileSync(
+    join(fixture.repository, '.github/workflows/ci.yml'),
+    'utf8',
+  )
+  assert.equal(workflow.includes('template-init:'), false)
+  assert.equal(workflow.includes('TEMPLATE_INIT_ANSWERS'), false)
+  assert.equal(workflow.includes('Test template initialization contract'), false)
   assert.equal(
     readFileSync(join(fixture.repository, 'front/index.html'), 'utf8').includes(
       `<title>${expected.displayName}</title>`,
@@ -264,7 +272,7 @@ test('initializes a renamed project while keeping examples', () => {
     if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
       run('just', ['check'], {
         cwd: fixture.repository,
-        env: { CARGO_TARGET_DIR: KEPT_CARGO_TARGET },
+        env: { CARGO_TARGET_DIR: INTEGRATION_CARGO_TARGET },
       })
       run('docker', ['compose', '-f', 'docker-compose.yml', 'config'], {
         cwd: fixture.repository,
@@ -293,7 +301,7 @@ test('initializes a renamed project and strips examples', () => {
     if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
       run('just', ['check'], {
         cwd: fixture.repository,
-        env: { CARGO_TARGET_DIR: STRIPPED_CARGO_TARGET },
+        env: { CARGO_TARGET_DIR: INTEGRATION_CARGO_TARGET },
       })
       run('docker', ['compose', '-f', 'docker-compose.yml', 'config'], {
         cwd: fixture.repository,

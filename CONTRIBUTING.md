@@ -59,6 +59,7 @@ Before opening a pull request:
 <!-- template-init:start -->
 - Update README and initialization guidance when changing project identity fields, Docker image names, database defaults, or automation commands.
 - Run `just test-template-init` when changing the initializer, example boundaries, or project identity touchpoints.
+- Run the manual `Template Integration` workflow before merging changes that alter initialization or example-cleanup behavior.
 <!-- template-init:end -->
 
 ## Code Style
