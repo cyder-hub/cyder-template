@@ -2,7 +2,7 @@
 name = "cyder-template"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version = "1.97.1"
 license = "MIT"
 default-run = "cyder-template"
 

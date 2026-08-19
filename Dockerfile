@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1
 
-FROM node:24-bookworm-slim AS frontend
+ARG NODE_VERSION=24.19.0
+ARG RUST_VERSION=1.97.1
+
+FROM node:${NODE_VERSION}-bookworm-slim AS frontend
 WORKDIR /workspace/front
 
 COPY front/package.json front/package-lock.json ./
@@ -9,7 +12,7 @@ RUN npm ci
 COPY front/ ./
 RUN npm run build
 
-FROM rust:1.94-bookworm AS backend
+FROM rust:${RUST_VERSION}-bookworm AS backend
 WORKDIR /workspace
 
 RUN apt-get update \

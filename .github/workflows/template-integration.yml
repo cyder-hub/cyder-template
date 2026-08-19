@@ -22,18 +22,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Node 24
+      - name: Set up pinned Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: front/package-lock.json
 
-      - name: Install Rust 1.94
+      - name: Activate pinned Rust toolchain
         shell: bash
         run: |
-          rustup toolchain install 1.94.0 --profile minimal --component rustfmt --component clippy
-          rustup default 1.94.0
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
 
       - name: Install native build dependencies when missing
         shell: bash

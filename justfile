@@ -14,11 +14,29 @@ init project="":
 strip-examples:
 	node "{{justfile_directory()}}/scripts/strip-examples.mjs"
 
+# Check the required toolchain, optional container tooling, and local ports.
+doctor:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	if ! command -v node >/dev/null 2>&1; then
+	  echo "[fail] Node.js is required; install the version in .node-version and ensure node is on PATH." >&2
+	  exit 1
+	fi
+	exec node '{{justfile_directory()}}/scripts/doctor.mjs'
+
+# Prepare a clean checkout for local development.
+bootstrap: doctor
+	node '{{justfile_directory()}}/scripts/bootstrap.mjs'
+
 # template-init:start
 # Test the project initializer in isolated Git worktrees.
 test-template-init:
 	node --test "{{justfile_directory()}}/scripts/template-project.test.mjs"
 # template-init:end
+
+# Test toolchain metadata, environment diagnostics, and bootstrap behavior.
+test-toolchain:
+	node --test "{{justfile_directory()}}/scripts/toolchain.test.mjs"
 
 # Run backend and frontend dev servers together.
 dev:
@@ -102,14 +120,14 @@ dev-backend:
 dev-front: install-front-deps
 	npm --prefix '{{justfile_directory()}}/front' run dev
 
-# Ensure frontend dependencies for iterative development.
+# Synchronize locked frontend dependencies for iterative development.
 install-front-deps:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	cd '{{justfile_directory()}}'
 	marker="front/node_modules/.package-lock.json"
 	if [[ ! -f "$marker" || front/package.json -nt "$marker" || front/package-lock.json -nt "$marker" ]]; then
-	  npm --prefix front install
+	  npm --prefix front ci
 	fi
 
 # Install locked frontend dependencies for verification/builds.
@@ -150,7 +168,7 @@ test-front: front-ci-deps
 	npm --prefix '{{justfile_directory()}}/front' test
 
 # Run the local aggregate verification suite.
-check: fmt-check lint-backend test-backend test-front build-front
+check: test-toolchain fmt-check lint-backend test-backend test-front build-front
 
 # Audit locked dependencies and dependency policy.
 audit:
