@@ -43,6 +43,7 @@ dev:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	cd '{{justfile_directory()}}'
+	proxy_target="$(node scripts/resolve-dev-proxy.mjs)"
 
 	backend_pid=""
 	frontend_pid=""
@@ -50,7 +51,12 @@ dev:
 
 	start_recipe() {
 	  local recipe="$1"
-	  if command -v setsid >/dev/null 2>&1; then
+	  local recipe_proxy_target="${2:-}"
+	  if [[ -n "$recipe_proxy_target" ]] && command -v setsid >/dev/null 2>&1; then
+	    DEV_PROXY_TARGET="$recipe_proxy_target" setsid just "$recipe" &
+	  elif [[ -n "$recipe_proxy_target" ]]; then
+	    DEV_PROXY_TARGET="$recipe_proxy_target" just "$recipe" &
+	  elif command -v setsid >/dev/null 2>&1; then
 	    setsid just "$recipe" &
 	  else
 	    just "$recipe" &
@@ -83,7 +89,7 @@ dev:
 
 	start_recipe dev-backend
 	backend_pid="$started_pid"
-	start_recipe dev-front
+	start_recipe dev-front "$proxy_target"
 	frontend_pid="$started_pid"
 
 	while true; do
@@ -116,9 +122,14 @@ dev-backend:
 	fi
 	exec cargo run -p cyder-template
 
-# Ensure frontend deps and run the Vite dev server.
-dev-front: install-front-deps
-	npm --prefix '{{justfile_directory()}}/front' run dev
+# Resolve the backend endpoint, ensure frontend deps, and run the Vite dev server.
+dev-front:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	cd '{{justfile_directory()}}'
+	proxy_target="$(node scripts/resolve-dev-proxy.mjs)"
+	just install-front-deps
+	exec env DEV_PROXY_TARGET="$proxy_target" npm --prefix front run dev
 
 # Synchronize locked frontend dependencies for iterative development.
 install-front-deps:
