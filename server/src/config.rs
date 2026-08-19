@@ -1,4 +1,8 @@
-use std::{env, net::SocketAddr, path::PathBuf};
+use std::{
+    env,
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+};
 
 use config::{Config, Environment, File};
 use serde::Deserialize;
@@ -100,7 +104,8 @@ impl AppConfig {
     }
 
     pub fn bind_address(&self) -> Result<SocketAddr, std::net::AddrParseError> {
-        format!("{}:{}", self.host, self.port).parse()
+        let host: IpAddr = self.host.parse()?;
+        Ok(SocketAddr::new(host, self.port))
     }
 }
 

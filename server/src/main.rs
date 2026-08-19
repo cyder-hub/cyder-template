@@ -1,4 +1,5 @@
 mod app;
+mod cli;
 mod config;
 mod controller;
 mod database;
@@ -10,12 +11,51 @@ mod service;
 // template-example:end
 mod shutdown;
 
-use std::net::SocketAddr;
+use std::{env, net::SocketAddr, process::ExitCode};
 
-use error::AppResult;
+use serde::Serialize;
+
+use error::{AppError, AppResult};
+
+type MainResult<T> = Result<T, MainError>;
+
+#[derive(Debug, thiserror::Error)]
+enum MainError {
+    #[error(transparent)]
+    Application(#[from] AppError),
+    #[error("command-line error: {0}")]
+    CommandLine(#[from] cli::ParseError),
+}
+
+#[derive(Debug, Serialize)]
+struct ConfigEndpoint {
+    host: String,
+    port: u16,
+}
 
 #[tokio::main]
-async fn main() -> AppResult<()> {
+async fn main() -> ExitCode {
+    match run().await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run() -> MainResult<()> {
+    match cli::parse(env::args_os().skip(1))? {
+        cli::Command::Serve => serve().await?,
+        cli::Command::ConfigEndpointJson => print_config_endpoint()?,
+        cli::Command::Help => {
+            print!("{}", cli::HELP);
+        }
+    }
+    Ok(())
+}
+
+async fn serve() -> AppResult<()> {
     let config = config::AppConfig::load()?;
     config.validate()?;
     init_tracing(&config.log_level)?;
@@ -35,6 +75,21 @@ async fn main() -> AppResult<()> {
     );
 
     shutdown::serve(listener, app, lifecycle, &config).await
+}
+
+fn print_config_endpoint() -> AppResult<()> {
+    let config = config::AppConfig::load()?;
+    config.validate()?;
+    let address = config.bind_address()?;
+    let endpoint = ConfigEndpoint {
+        host: address.ip().to_string(),
+        port: address.port(),
+    };
+    let output = serde_json::to_string(&endpoint).map_err(|source| AppError::Internal {
+        message: format!("failed to serialize configuration endpoint: {source}"),
+    })?;
+    println!("{output}");
+    Ok(())
 }
 
 fn init_tracing(log_level: &str) -> AppResult<()> {

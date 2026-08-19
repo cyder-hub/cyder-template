@@ -54,7 +54,7 @@ just dev
 
 `just bootstrap` checks the required toolchain and local ports, installs the locked frontend dependencies with `npm ci`, creates `.app/dev/db`, and creates `.env` from `.env.example` only when `.env` is absent. It never overwrites an existing local environment file. Docker and its Compose plugin are optional for the default SQLite path, so unavailable container tooling is reported as a warning.
 
-`just dev` starts the backend on `127.0.0.1:8000` and the Vite dev server for the Vue frontend. When `APP_DATA_DIR` is not set, the backend uses `.app/dev` and creates the SQLite database at `.app/dev/db/cyder-template.sqlite`.
+`just dev` asks the Rust configuration loader for the backend's resolved endpoint, starts the backend and Vite dev server in parallel, and injects the corresponding HTTP origin into Vite. The default remains `127.0.0.1:8000`; changing `APP_PORT` or the selected YAML configuration keeps the proxy aligned automatically. When `APP_DATA_DIR` is not set, the backend uses `.app/dev` and creates the SQLite database at `.app/dev/db/cyder-template.sqlite`.
 
 Open the Vite URL printed by `npm run dev`. The frontend proxies `/api`, `/healthz`, and `/readyz` to the backend.
 
@@ -96,6 +96,14 @@ Dependency security is intentionally separate from `just check` so normal local 
 
 The `justfile` is for human development. CI and automation can call the same underlying Cargo, npm, and Docker commands directly.
 
+Use the `just` development commands instead of invoking `npm run dev` directly. The Vite development server deliberately fails when its resolved target has not been injected; it does not scan backend `.env`, YAML, or TOML files. If you intentionally want the frontend to use a remote or containerized backend, provide a strict HTTP(S) origin explicitly:
+
+```bash
+DEV_PROXY_TARGET=https://dev-api.example.com just dev-front
+```
+
+The explicit target takes precedence and skips backend configuration lookup. It must not contain credentials, a non-root path, a query, or a fragment. TLS verification remains enabled.
+
 ## Configuration
 
 The backend loads built-in defaults, then an optional YAML file, then `APP_*` environment variables. Set `APP_CONFIG_PATH` to choose a YAML file:
@@ -123,6 +131,24 @@ APP_SHUTDOWN_TIMEOUT_MS=8000
 ```
 
 `just bootstrap` copies `.env.example` to `.env` when the local file is absent. You can also copy it manually; `just` recipes load `.env` overrides automatically.
+
+The application binary exposes the non-sensitive resolved listen endpoint for local development tooling:
+
+```bash
+cargo run -p cyder-template -- config endpoint --format json
+# {"host":"127.0.0.1","port":8000}
+```
+
+Rust remains the only application configuration parser. `just dev` consumes this JSON contract and converts unspecified bind addresses to usable local connection addresses: `0.0.0.0` becomes `127.0.0.1`, and `::` becomes `::1`. Other hosts and the resolved port are preserved. Port `0` cannot be used for automatic proxy derivation.
+
+For example, both environment and YAML overrides flow through the same Rust resolver:
+
+```bash
+APP_PORT=9000 just dev
+APP_CONFIG_PATH=config.local.yaml just dev
+```
+
+`DEV_PROXY_TARGET` is a development orchestration variable, not an `APP_*` backend setting. Production does not use this proxy contract: the Rust process loads its configuration directly and serves the built frontend on the same origin.
 
 ## Databases
 
