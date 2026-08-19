@@ -1,12 +1,12 @@
 name: Bug report
-description: Report a problem with the template, documentation, CI, Docker, or example app.
+description: Report a problem with the project, documentation, CI, Docker, or application.
 title: "[Bug]: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this for template bugs and documentation issues. Do not disclose unfixed security vulnerabilities here; use GitHub private vulnerability reporting.
+        Use this for project bugs and documentation issues. Do not disclose unfixed security vulnerabilities here; use GitHub private vulnerability reporting.
   - type: textarea
     id: summary
     attributes:

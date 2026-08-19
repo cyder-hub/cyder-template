@@ -1,6 +1,8 @@
 # Contributing
 
+<!-- template-init:start -->
 This repository is a GitHub template for a Rust backend and Vue frontend. Contributions should improve the template itself: correctness, documentation, local developer workflow, CI, Docker, and generic example resources.
+<!-- template-init:end -->
 
 ## Local Setup
 
@@ -53,8 +55,11 @@ Before opening a pull request:
 - Keep generated and local files out of the commit, including `front/node_modules/`, `front/dist/`, `target/`, `.app/`, `.env`, local databases, and logs.
 - Do not commit real credentials, tokens, private endpoints, or machine-specific config.
 - Keep the main README in English.
-- Do not add product claims for features the template does not implement, such as authentication, authorization, teams, tenants, or production deployment automation.
-- Update README and template rename guidance when changing `cyder-template`, `cyder_template`, Docker image names, database defaults, or automation commands.
+- Do not add product claims for features the project does not implement, such as authentication, authorization, teams, tenants, or production deployment automation.
+<!-- template-init:start -->
+- Update README and initialization guidance when changing project identity fields, Docker image names, database defaults, or automation commands.
+- Run `just test-template-init` when changing the initializer, example boundaries, or project identity touchpoints.
+<!-- template-init:end -->
 
 ## Code Style
 
@@ -87,4 +92,4 @@ Fix or update a vulnerable dependency instead of suppressing its advisory. If a 
 { id = "RUSTSEC-YYYY-NNNN", reason = "owner=@github-user-or-org/team; expires=YYYY-MM-DD; justification=why the temporary risk is accepted" },
 ```
 
-The owner must identify an accountable GitHub user or team, the justification must be meaningful, and the UTC expiry date must be in the future but no more than 90 days away. `just audit` and CI reject malformed, expired, overlong, duplicate, or unused exceptions. npm high/critical advisories do not have an ignore mechanism in this template.
+The owner must identify an accountable GitHub user or team, the justification must be meaningful, and the UTC expiry date must be in the future but no more than 90 days away. `just audit` and CI reject malformed, expired, overlong, duplicate, or unused exceptions. npm high/critical advisories do not have an ignore mechanism in this repository.

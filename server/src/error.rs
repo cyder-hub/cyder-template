@@ -48,8 +48,10 @@ pub enum AppError {
         #[from]
         source: crate::id::IdError,
     },
+    // template-example:start
     #[error("{resource} {id} was not found")]
     NotFound { resource: &'static str, id: i64 },
+    // template-example:end
     #[error("readiness check failed: {message}")]
     Readiness { message: String },
     #[error("failed to install shutdown signal handler: {source}")]
@@ -77,7 +79,9 @@ impl AppError {
     fn status_code(&self) -> StatusCode {
         match self {
             AppError::Readiness { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            // template-example:start
             AppError::NotFound { .. } => StatusCode::NOT_FOUND,
+            // template-example:end
             AppError::Config { .. }
             | AppError::ConfigValidation { .. }
             | AppError::BindAddress { .. } => StatusCode::BAD_REQUEST,
@@ -101,7 +105,9 @@ impl AppError {
             AppError::DatabaseInit { .. } => "database_init_error",
             AppError::Database { .. } => "database_error",
             AppError::Id { .. } => "id_error",
+            // template-example:start
             AppError::NotFound { .. } => "not_found",
+            // template-example:end
             AppError::Readiness { .. } => "readiness_failed",
             AppError::ShutdownSignal { .. } => "shutdown_signal_error",
             AppError::ShutdownTimeout { .. } => "shutdown_timeout",

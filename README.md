@@ -1,43 +1,32 @@
 # cyder-template
 
-Rust + Vue project template for a small backend-first web application.
+Rust + Vue foundation for a small backend-first web application.
 
-The template provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style IDs, health/readiness checks, and a Vue 3 operations UI for the example `items` and `users` resources. IDs are stored internally as `i64` and serialized as strings in JSON responses so browser clients do not lose 64-bit integer precision. The `users` resource is only CRUD sample data; it is not an authentication, role, team, or tenant system.
+The project provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style IDs, health/readiness checks, and a Vue 3 operations UI. IDs are stored internally as `i64` and serialized as strings at JSON boundaries so browser clients do not lose 64-bit integer precision.
 
+<!-- template-example:start -->
+The included `items` and `users` CRUD resources demonstrate the full backend and frontend path. The `users` resource is sample data only; it is not an authentication, role, team, or tenant system.
+<!-- template-example:end -->
+
+<!-- template-init:start -->
 ## Use This Template
 
-Create a new repository from this template with GitHub's **Use this template** button, then clone your new repository and rename the project before the first release. Search for these template names after each rename pass:
-
-- `cyder-template`
-- `cyder_template`
-- `cyder-template-front`
-
-Rename checklist:
-
-- `README.md`: update the title and project description.
-- `server/Cargo.toml`: update `[package].name`, `default-run`, and `[[bin]].name`.
-- `Cargo.lock`: regenerate it after changing the Rust package name.
-- `server/src/app.rs`: update `APP_NAME`.
-- `server/src/config.rs`, `server/src/database/mod.rs`, `config.sample.yaml`, and `.env.example`: update default SQLite paths and PostgreSQL database/user examples.
-- `front/package.json` and `front/package-lock.json`: update the package name from `cyder-template-front`.
-- `front/index.html`, `front/src/App.vue`, and `front/src/store/index.ts`: update visible app and service names.
-- `Dockerfile`: update `cargo build -p cyder-template`, the copied release binary path, and `CMD ["cyder-template"]`.
-- `docker-compose.yml` and `docker/postgres/init/`: update the `cyder-template:local` image name, `cyder-template-data` and `cyder-template-postgres-data` volumes, and the default `cyder_template` database, test database, user, and URL values.
-- `justfile`: update the crate name used by Cargo recipes and the default Docker image name.
-- `.github/workflows/ci.yml`: update the Docker image tag `cyder-template:ci`.
-- `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/feature_request.yml`, and `CONTRIBUTING.md`: update verification command examples.
-- `.github/ISSUE_TEMPLATE/config.yml`: update the private vulnerability reporting link when the GitHub owner or repository name changes.
-- `.github/dependabot.yml`: update `target-branch` if the new repository does not use `main`.
-- `LICENSE`: update the copyright holder if needed.
-
-Shortest local verification path after renaming:
+Create a new repository with GitHub's **Use this template** button, clone it, and run the interactive initializer before making project changes:
 
 ```bash
-npm --prefix front ci
-just check
-docker compose -f docker-compose.yml config
-docker build -t your-project:ci -f Dockerfile .
+just init
 ```
+
+The wizard validates a lowercase kebab-case project slug, derives the Rust, npm, database, Docker, and display identities, confirms the GitHub security-reporting link, and optionally removes the example resources. It requires a clean Git worktree and never changes the repository directory, remote, history, ignored build artifacts, or local databases.
+
+You can prefill the slug while keeping the remaining confirmations interactive:
+
+```bash
+just init my-api
+```
+
+Automation can call `node scripts/init-project.mjs --answers-file <path>` with a reviewed JSON answer file. The human-facing `just init` command intentionally keeps these details inside the wizard.
+<!-- template-init:end -->
 
 ## Requirements
 
@@ -80,6 +69,10 @@ just docker-build        # local Docker image build
 just test-container-shutdown # graceful SIGTERM test for the local image
 ```
 
+<!-- template-example:start -->
+Run `just strip-examples` from a clean, initialized project to remove the optional `items/users` resources without touching existing database data.
+<!-- template-example:end -->
+
 `just audit` requires `cargo-deny` 0.20.2 and registry access. Install the pinned version with:
 
 ```bash
@@ -88,7 +81,7 @@ cargo install --locked cargo-deny --version 0.20.2
 
 Dependency security is intentionally separate from `just check` so normal local verification does not install tools or depend on advisory services. The Security workflow runs the same policies for every pull request and default-branch push, and once per day.
 
-The template `justfile` is for human development. CI and automation can call the same underlying Cargo, npm, and Docker commands directly.
+The `justfile` is for human development. CI and automation can call the same underlying Cargo, npm, and Docker commands directly.
 
 ## Configuration
 
@@ -120,7 +113,7 @@ Copy `.env.example` to `.env` when you want `just` recipes to load local overrid
 
 ## Databases
 
-The backend keeps Diesel as the template's default database layer and uses `diesel_async` for async connection pooling and query execution. This preserves Diesel schema files, embedded migrations, and typed query composition for projects that grow beyond the sample `items` and `users` resources. SQL-first libraries can still be a good choice for other templates; this template defaults to Diesel because it already carries dual SQLite/PostgreSQL schema and migration structure.
+The backend keeps Diesel as its default database layer and uses `diesel_async` for async connection pooling and query execution. This preserves Diesel schema files, embedded migrations, and typed query composition as the project grows. SQL-first libraries can still be a good choice for other projects; this repository defaults to Diesel because it already carries dual SQLite/PostgreSQL schema and migration structure.
 
 SQLite is the default development database. No external service is required:
 
@@ -146,7 +139,7 @@ PostgreSQL integration tests are opt-in because they need a disposable database.
 APP_TEST_POSTGRES_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
 ```
 
-The PostgreSQL test uses a pool size greater than one and covers migrations, readiness, and example `items`/`users` CRUD. Without `APP_TEST_POSTGRES_URL`, the ignored PostgreSQL test is not part of the default `cargo test --workspace` path.
+The PostgreSQL test uses a pool size greater than one and covers migrations and readiness. Without `APP_TEST_POSTGRES_URL`, the ignored PostgreSQL test is not part of the default `cargo test --workspace` path.
 
 The compose setup creates `cyder_template_test` only when PostgreSQL initializes a fresh volume. If you already have a local compose volume, create a separate test database manually or recreate the local volume before running the PostgreSQL integration test.
 
@@ -164,6 +157,7 @@ Health endpoints:
 - `GET /healthz` checks that the process is alive.
 - `GET /readyz` checks that the service accepts traffic and that its database is connected.
 
+<!-- template-example:start -->
 Example resources:
 
 - `GET /api/items`
@@ -183,6 +177,7 @@ ID boundary convention:
 - Frontend resource types use `string` for IDs and pass those strings back in URLs.
 
 This keeps database indexes and backend arithmetic efficient while avoiding JavaScript 64-bit integer precision loss in browser clients.
+<!-- template-example:end -->
 
 ## Graceful Shutdown
 
@@ -244,13 +239,13 @@ Compose builds the same `cyder-template:local` image, starts a local PostgreSQL 
 
 ## Automation
 
-This template includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
+This repository includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
 
 - `Backend`: installs Rust 1.94 with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
 - `Frontend`: uses Node 24, runs locked npm install, type checks through `npm test`, and builds the Vite app.
 - `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, builds `cyder-template:ci`, then starts it and verifies graceful SIGTERM handling within Docker's default stop deadline.
 
-When renaming the template, update the workflow's Docker image tag together with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Node should stay on the 24.x line across local development and automation, with 24.11 or newer as the minimum.
+Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Node should stay on the 24.x line across local development and automation, with 24.11 or newer as the minimum.
 
 ## License
 

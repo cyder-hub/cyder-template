@@ -6,6 +6,20 @@ default: list
 list:
 	@just --list
 
+# Initialize project identity with an interactive wizard.
+init project="":
+	node "{{justfile_directory()}}/scripts/init-project.mjs" "{{project}}"
+
+# Remove the optional items/users example resources.
+strip-examples:
+	node "{{justfile_directory()}}/scripts/strip-examples.mjs"
+
+# template-init:start
+# Test the project initializer in isolated Git worktrees.
+test-template-init:
+	node --test "{{justfile_directory()}}/scripts/template-project.test.mjs"
+# template-init:end
+
 # Run backend and frontend dev servers together.
 dev:
 	#!/usr/bin/env bash
