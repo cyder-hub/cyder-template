@@ -19,10 +19,11 @@ use crate::{
 };
 
 pub const APP_NAME: &str = "cyder-template";
+pub const FRONTEND_DIR: &str = "front/dist";
+const SINGLE_INSTANCE_WORKER_ID: u64 = 1;
 
 #[derive(Clone)]
 pub struct AppState {
-    config: Arc<AppConfig>,
     database: database::DbPool,
     lifecycle: Lifecycle,
     #[allow(dead_code)]
@@ -36,19 +37,15 @@ impl AppState {
             config.database_acquire_timeout_ms,
             config.sqlite_busy_timeout_ms,
         );
-        let database = database::DbPool::connect(&config.database_url, database_options).await?;
-        let id_generator = IdGenerator::for_worker(config.id_worker_id)?;
+        let database =
+            database::DbPool::connect(config.database_url.as_str(), database_options).await?;
+        let id_generator = IdGenerator::for_worker(SINGLE_INSTANCE_WORKER_ID)?;
 
         Ok(Self {
-            config: Arc::new(config),
             database,
             lifecycle: Lifecycle::new(),
             id_generator: Arc::new(id_generator),
         })
-    }
-
-    pub fn config(&self) -> &AppConfig {
-        self.config.as_ref()
     }
 
     pub fn database(&self) -> &database::DbPool {
@@ -66,10 +63,13 @@ impl AppState {
 }
 
 pub fn build_app(state: AppState) -> Router {
-    let public_dir = state.config().public_dir.clone();
-    let index_file = PathBuf::from(&public_dir).join("index.html");
+    build_app_with_frontend_dir(state, PathBuf::from(FRONTEND_DIR))
+}
+
+fn build_app_with_frontend_dir(state: AppState, frontend_dir: PathBuf) -> Router {
+    let index_file = frontend_dir.join("index.html");
     let static_files =
-        ServeDir::new(public_dir).fallback(service_fn(move |request: Request<Body>| {
+        ServeDir::new(frontend_dir).fallback(service_fn(move |request: Request<Body>| {
             let index_file = index_file.clone();
             async move { Ok::<_, Infallible>(spa_fallback(request, index_file).await) }
         }));
@@ -171,7 +171,7 @@ mod tests {
 
     async fn test_state() -> AppState {
         AppState::new(AppConfig {
-            database_url: ":memory:".to_string(),
+            database_url: crate::config::DatabaseUrl::sqlite_memory(),
             ..AppConfig::default()
         })
         .await
@@ -188,7 +188,7 @@ mod tests {
             .into_owned();
 
         let state = AppState::new(AppConfig {
-            database_url,
+            database_url: crate::config::DatabaseUrl::sqlite_path(database_url),
             database_pool_size: 1,
             ..AppConfig::default()
         })
@@ -304,7 +304,7 @@ mod tests {
             body,
             json!({
                 "error": "readiness_failed",
-                "message": "readiness check failed: service is shutting down"
+                "message": "service is not ready"
             })
         );
 
@@ -444,13 +444,12 @@ mod tests {
             .expect("index file should be written");
 
         let state = AppState::new(AppConfig {
-            database_url: ":memory:".to_string(),
-            public_dir: temp_dir.path().to_string_lossy().into_owned(),
+            database_url: crate::config::DatabaseUrl::sqlite_memory(),
             ..AppConfig::default()
         })
         .await
         .expect("test app state should initialize");
-        let app = build_app(state);
+        let app = build_app_with_frontend_dir(state, temp_dir.path().to_path_buf());
 
         let (status, body) = request_text(app.clone(), "/dashboard").await;
         assert_eq!(status, StatusCode::OK);

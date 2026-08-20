@@ -311,11 +311,11 @@ export async function diagnose(options = {}) {
   results.push(
     await portResult({
       label: 'PostgreSQL port',
-      value: env.POSTGRES_PORT || '5432',
+      value: '5432',
       host: '127.0.0.1',
       level: 'warn',
       occupiedDetail: (port) => `127.0.0.1:${port} is occupied; local PostgreSQL Compose may not start`,
-      fix: 'Stop the conflicting service or set POSTGRES_PORT before using Compose.',
+      fix: 'Stop the conflicting service or use a Docker Compose override file.',
       probe,
     }),
   )

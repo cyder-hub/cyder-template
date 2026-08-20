@@ -43,6 +43,15 @@ if [[ "$ready" != "true" ]]; then
   fail "container did not become ready within 30 seconds"
 fi
 
+if ! docker exec "$container_name" test -f /data/db/cyder-template.sqlite; then
+  fail "default SQLite database was not created under /data/db"
+fi
+
+process_uid="$(docker exec "$container_name" /bin/sh -c "awk '/^Uid:/{print \$2}' /proc/1/status")"
+if [[ "$process_uid" != "10001" ]]; then
+  fail "service process must run as UID 10001; found ${process_uid}"
+fi
+
 SECONDS=0
 docker stop --time 10 "$container_name" >/dev/null
 elapsed_seconds="$SECONDS"

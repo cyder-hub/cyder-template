@@ -22,29 +22,16 @@ use diesel_async::{
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use serde::Serialize;
 
-use crate::error::{AppError, AppResult};
+use crate::{
+    config::DatabaseKind,
+    error::{AppError, AppResult},
+};
 
 // The initializer uses an equivalent path spelling after removing example
 // migrations so Diesel's proc macro cannot reuse a stale expansion.
 const SQLITE_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/sqlite");
 const POSTGRES_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/postgres");
 static SQLITE_MEMORY_DATABASE_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DatabaseKind {
-    Postgres,
-    Sqlite,
-}
-
-impl std::fmt::Display for DatabaseKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DatabaseKind::Postgres => f.write_str("postgres"),
-            DatabaseKind::Sqlite => f.write_str("sqlite"),
-        }
-    }
-}
 
 pub fn database_kind(database_url: &str) -> DatabaseKind {
     let database_url = database_url.to_ascii_lowercase();
@@ -57,33 +44,39 @@ pub fn database_kind(database_url: &str) -> DatabaseKind {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DatabaseInitError {
-    #[error("failed to create sqlite database directory '{path}': {source}")]
+    #[error("failed to create sqlite database directory")]
     CreateSqliteDirectory {
         path: PathBuf,
+        #[source]
         source: std::io::Error,
     },
-    #[error("failed to create sqlite database file '{path}': {source}")]
+    #[error("failed to create sqlite database file")]
     CreateSqliteFile {
         path: PathBuf,
+        #[source]
         source: std::io::Error,
     },
-    #[error("sqlite database path exists but is not a file: '{path}'")]
+    #[error("sqlite database path exists but is not a file")]
     InvalidSqliteFile { path: PathBuf },
-    #[error("sqlite database parent path exists but is not a directory: '{path}'")]
+    #[error("sqlite database parent path exists but is not a directory")]
     InvalidSqliteDirectory { path: PathBuf },
-    #[error("failed to establish sqlite migration connection for '{path}': {source}")]
+    #[error("failed to establish sqlite migration connection")]
     SqliteConnection {
         path: PathBuf,
+        #[source]
         source: diesel::ConnectionError,
     },
-    #[error("failed to establish postgres migration connection: {source}")]
-    PostgresConnection { source: diesel::ConnectionError },
-    #[error("failed to run {backend} migrations: {message}")]
+    #[error("failed to establish postgres migration connection")]
+    PostgresConnection {
+        #[source]
+        source: diesel::ConnectionError,
+    },
+    #[error("failed to run {backend} migrations")]
     Migration {
         backend: &'static str,
         message: String,
     },
-    #[error("failed to create {backend} database pool: {message}")]
+    #[error("failed to create {backend} database pool")]
     Pool {
         backend: &'static str,
         message: String,
@@ -93,12 +86,12 @@ pub enum DatabaseInitError {
 #[derive(Debug, thiserror::Error)]
 #[allow(dead_code)]
 pub enum DatabaseError {
-    #[error("{backend} database pool checkout failed: {message}")]
+    #[error("{backend} database pool checkout failed")]
     PoolCheckout {
         backend: &'static str,
         message: String,
     },
-    #[error("{backend} database operation failed: {source}")]
+    #[error("{backend} database operation failed")]
     Operation {
         backend: &'static str,
         source: diesel::result::Error,
@@ -115,8 +108,8 @@ pub struct DbPoolOptions {
 impl DbPoolOptions {
     pub fn new(pool_size: u32, acquire_timeout_ms: u64, sqlite_busy_timeout_ms: u64) -> Self {
         Self {
-            pool_size: pool_size.max(1),
-            acquire_timeout: Duration::from_millis(acquire_timeout_ms.max(1)),
+            pool_size,
+            acquire_timeout: Duration::from_millis(acquire_timeout_ms),
             sqlite_busy_timeout: Duration::from_millis(sqlite_busy_timeout_ms),
         }
     }
@@ -472,7 +465,7 @@ fn effective_sqlite_pool_size(database_url: &str, configured_pool_size: u32) -> 
     if is_sqlite_memory_database(database_url) {
         1
     } else {
-        configured_pool_size.max(1)
+        configured_pool_size
     }
 }
 
@@ -692,10 +685,10 @@ mod tests {
     // template-example:end
 
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "requires APP_TEST_POSTGRES_URL pointing at an isolated PostgreSQL test database"]
+    #[ignore = "requires DEV_POSTGRES_TEST_URL pointing at an isolated PostgreSQL test database"]
     async fn postgres_pool_connects_and_checks_readiness() {
-        let database_url = std::env::var("APP_TEST_POSTGRES_URL")
-            .expect("APP_TEST_POSTGRES_URL must point at an isolated PostgreSQL test database");
+        let database_url = std::env::var("DEV_POSTGRES_TEST_URL")
+            .expect("DEV_POSTGRES_TEST_URL must point at an isolated PostgreSQL test database");
         let pool = DbPool::connect(&database_url, DbPoolOptions::new(4, 2_000, 5_000))
             .await
             .expect("postgres pool should initialize");
@@ -710,10 +703,10 @@ mod tests {
     }
     // template-example:start
     #[tokio::test(flavor = "multi_thread")]
-    #[ignore = "requires APP_TEST_POSTGRES_URL pointing at an isolated PostgreSQL test database"]
+    #[ignore = "requires DEV_POSTGRES_TEST_URL pointing at an isolated PostgreSQL test database"]
     async fn postgres_pool_with_multiple_connections_runs_crud_and_readiness() {
-        let database_url = std::env::var("APP_TEST_POSTGRES_URL")
-            .expect("APP_TEST_POSTGRES_URL must point at an isolated PostgreSQL test database");
+        let database_url = std::env::var("DEV_POSTGRES_TEST_URL")
+            .expect("DEV_POSTGRES_TEST_URL must point at an isolated PostgreSQL test database");
         let pool = DbPool::connect(&database_url, DbPoolOptions::new(4, 2_000, 5_000))
             .await
             .expect("postgres pool should initialize");

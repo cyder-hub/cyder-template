@@ -16,12 +16,7 @@ pub enum AppError {
     #[error("configuration error: {source}")]
     Config {
         #[from]
-        source: config::ConfigError,
-    },
-    #[error("invalid configuration: {source}")]
-    ConfigValidation {
-        #[from]
-        source: crate::config::ConfigValidationError,
+        source: crate::config::ConfigError,
     },
     #[error("invalid bind address: {source}")]
     BindAddress {
@@ -67,9 +62,16 @@ pub enum AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let status = self.status_code();
+        let message = match &self {
+            AppError::DatabaseInit { .. } | AppError::Database { .. } => {
+                "internal database error".to_string()
+            }
+            AppError::Readiness { .. } => "service is not ready".to_string(),
+            _ => self.to_string(),
+        };
         let body = ErrorResponse {
             error: self.error_code().to_string(),
-            message: self.to_string(),
+            message,
         };
         (status, Json(body)).into_response()
     }
@@ -82,9 +84,7 @@ impl AppError {
             // template-example:start
             AppError::NotFound { .. } => StatusCode::NOT_FOUND,
             // template-example:end
-            AppError::Config { .. }
-            | AppError::ConfigValidation { .. }
-            | AppError::BindAddress { .. } => StatusCode::BAD_REQUEST,
+            AppError::Config { .. } | AppError::BindAddress { .. } => StatusCode::BAD_REQUEST,
             AppError::Server { .. }
             | AppError::DatabaseInit { .. }
             | AppError::Database { .. }
@@ -99,7 +99,6 @@ impl AppError {
     fn error_code(&self) -> &'static str {
         match self {
             AppError::Config { .. } => "config_error",
-            AppError::ConfigValidation { .. } => "config_validation_error",
             AppError::BindAddress { .. } => "bind_address_error",
             AppError::Server { .. } => "server_error",
             AppError::DatabaseInit { .. } => "database_init_error",
@@ -114,5 +113,44 @@ impl AppError {
             AppError::ShutdownForced { .. } => "shutdown_forced",
             AppError::Internal { .. } => "internal_error",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn database_http_errors_never_expose_internal_details() {
+        let secret = "unique-database-secret-marker";
+        let response = AppError::Database {
+            source: crate::database::DatabaseError::PoolCheckout {
+                backend: "postgres",
+                message: format!("postgres://app:{secret}@database/app"),
+            },
+        }
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = to_bytes(response.into_body(), 1024)
+            .await
+            .expect("response body should read");
+        let body = String::from_utf8(body.to_vec()).expect("response body should be UTF-8");
+        assert!(!body.contains(secret));
+        assert!(body.contains("internal database error"));
+
+        let readiness = AppError::Readiness {
+            message: format!("postgres://app:{secret}@database/app"),
+        }
+        .into_response();
+        assert_eq!(readiness.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body = to_bytes(readiness.into_body(), 1024)
+            .await
+            .expect("response body should read");
+        let body = String::from_utf8(body.to_vec()).expect("response body should be UTF-8");
+        assert!(!body.contains(secret));
+        assert!(body.contains("service is not ready"));
     }
 }

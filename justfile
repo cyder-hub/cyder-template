@@ -1,5 +1,3 @@
-set dotenv-load := true
-
 default: list
 
 # Show available local shortcuts.
@@ -117,9 +115,6 @@ dev-backend:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	cd '{{justfile_directory()}}'
-	if [[ -z "${APP_DATA_DIR:-}" ]]; then
-	  export APP_DATA_DIR='{{justfile_directory()}}/.app/dev'
-	fi
 	exec cargo run -p cyder-template
 
 # Resolve the backend endpoint, ensure frontend deps, and run the Vite dev server.
@@ -168,11 +163,15 @@ test-postgres:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	cd '{{justfile_directory()}}'
-	if [[ -z "${APP_TEST_POSTGRES_URL:-}" ]]; then
-	  echo "APP_TEST_POSTGRES_URL must point to an isolated PostgreSQL test database." >&2
+	if [[ -z "${DEV_POSTGRES_TEST_URL:-}" ]]; then
+	  echo "DEV_POSTGRES_TEST_URL must point to an isolated PostgreSQL test database." >&2
 	  exit 2
 	fi
-	cargo test -p cyder-template postgres -- --ignored
+	DEV_POSTGRES_TEST_URL="$DEV_POSTGRES_TEST_URL" cargo test -p cyder-template postgres -- --ignored
+
+# Validate the resolved deployment configuration without side effects.
+check-config:
+	cd '{{justfile_directory()}}' && cargo run --quiet --locked -p cyder-template -- config check --strict
 
 # Run frontend checks.
 test-front: front-ci-deps
@@ -224,3 +223,7 @@ docker-build image="cyder-template:local":
 # Verify graceful SIGTERM handling in an already-built container image.
 test-container-shutdown image="cyder-template:local":
 	bash '{{justfile_directory()}}/scripts/test-container-shutdown.sh' "{{image}}"
+
+# Verify the safe configuration and directory contract in an already-built image.
+test-container-config image="cyder-template:local":
+	bash '{{justfile_directory()}}/scripts/test-container-config.sh' "{{image}}"

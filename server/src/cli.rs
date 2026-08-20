@@ -7,13 +7,25 @@ pub const HELP: &str = concat!(
     env!("CARGO_PKG_NAME"),
     " config endpoint --format json\n  ",
     env!("CARGO_PKG_NAME"),
+    " config check [--strict] [--format json]\n  ",
+    env!("CARGO_PKG_NAME"),
+    " healthcheck\n  ",
+    env!("CARGO_PKG_NAME"),
     " --help\n",
 );
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputFormat {
+    Text,
+    Json,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command {
     Serve,
     ConfigEndpointJson,
+    ConfigCheck { strict: bool, format: OutputFormat },
+    Healthcheck,
     Help,
 }
 
@@ -40,8 +52,28 @@ where
         [] => Ok(Command::Serve),
         ["--help" | "-h"]
         | ["config", "--help" | "-h"]
-        | ["config", "endpoint", "--help" | "-h"] => Ok(Command::Help),
+        | ["config", "endpoint", "--help" | "-h"]
+        | ["config", "check", "--help" | "-h"]
+        | ["healthcheck", "--help" | "-h"] => Ok(Command::Help),
         ["config", "endpoint", "--format", "json"] => Ok(Command::ConfigEndpointJson),
+        ["config", "check"] => Ok(Command::ConfigCheck {
+            strict: false,
+            format: OutputFormat::Text,
+        }),
+        ["config", "check", "--strict"] => Ok(Command::ConfigCheck {
+            strict: true,
+            format: OutputFormat::Text,
+        }),
+        ["config", "check", "--format", "json"] => Ok(Command::ConfigCheck {
+            strict: false,
+            format: OutputFormat::Json,
+        }),
+        ["config", "check", "--strict", "--format", "json"]
+        | ["config", "check", "--format", "json", "--strict"] => Ok(Command::ConfigCheck {
+            strict: true,
+            format: OutputFormat::Json,
+        }),
+        ["healthcheck"] => Ok(Command::Healthcheck),
         _ => Err(ParseError {
             message: format!(
                 "unsupported command-line arguments: {}",
@@ -92,12 +124,38 @@ mod tests {
     }
 
     #[test]
+    fn config_check_supports_text_json_and_strict_modes() {
+        assert_eq!(
+            parse(args(&["config", "check"])).unwrap(),
+            Command::ConfigCheck {
+                strict: false,
+                format: OutputFormat::Text
+            }
+        );
+        assert_eq!(
+            parse(args(&["config", "check", "--strict", "--format", "json"])).unwrap(),
+            Command::ConfigCheck {
+                strict: true,
+                format: OutputFormat::Json
+            }
+        );
+    }
+
+    #[test]
+    fn healthcheck_command_is_exact() {
+        assert_eq!(parse(args(&["healthcheck"])).unwrap(), Command::Healthcheck);
+        assert!(parse(args(&["healthcheck", "extra"])).is_err());
+    }
+
+    #[test]
     fn help_is_available_at_each_command_level() {
         for values in [
             &["--help"][..],
             &["-h"][..],
             &["config", "--help"][..],
             &["config", "endpoint", "--help"][..],
+            &["config", "check", "--help"][..],
+            &["healthcheck", "--help"][..],
         ] {
             assert_eq!(parse(args(values)).unwrap(), Command::Help);
         }

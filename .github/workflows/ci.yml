@@ -42,11 +42,11 @@ jobs:
 
       - name: Initialize retained-example project
         env:
-          TEMPLATE_INIT_ANSWERS: >-
+          DEV_TEMPLATE_INIT_ANSWERS: >-
             {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","keepExamples":true,"runCheck":false,"confirm":true}
         run: |
           answers_file="${RUNNER_TEMP}/template-init-answers.json"
-          printf '%s\n' "${TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
+          printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
           node scripts/init-project.mjs --answers-file "${answers_file}"
       # template-init:end
 
@@ -108,11 +108,11 @@ jobs:
       - name: Initialize retained-example project
         working-directory: .
         env:
-          TEMPLATE_INIT_ANSWERS: >-
+          DEV_TEMPLATE_INIT_ANSWERS: >-
             {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","keepExamples":true,"runCheck":false,"confirm":true}
         run: |
           answers_file="${RUNNER_TEMP}/template-init-answers.json"
-          printf '%s\n' "${TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
+          printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
           node scripts/init-project.mjs --answers-file "${answers_file}"
       # template-init:end
 
@@ -148,11 +148,11 @@ jobs:
 
       - name: Initialize stripped-example project
         env:
-          TEMPLATE_INIT_ANSWERS: >-
+          DEV_TEMPLATE_INIT_ANSWERS: >-
             {"projectSlug":"ci-bare-service","displayName":"CI Bare Service","githubRepository":"cyder-hub/ci-bare-service","keepExamples":false,"runCheck":false,"confirm":true}
         run: |
           answers_file="${RUNNER_TEMP}/template-init-answers.json"
-          printf '%s\n' "${TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
+          printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
           node scripts/init-project.mjs --answers-file "${answers_file}"
       # template-init:end
 
@@ -161,6 +161,9 @@ jobs:
 
       - name: Build image
         run: docker build -t cyder-template:ci -f Dockerfile .
+
+      - name: Test container configuration contract
+        run: bash scripts/test-container-config.sh cyder-template:ci
 
       - name: Test graceful container shutdown
         run: bash scripts/test-container-shutdown.sh cyder-template:ci

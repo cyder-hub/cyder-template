@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createServer } from 'node:net'
 import { once } from 'node:events'
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -64,6 +64,28 @@ test('keeps checked-in Node and Rust declarations aligned', () => {
     'utf8',
   )
   assert.equal(securityWorkflow.includes(`rust-version: "${requirements.rustVersion}"`), true)
+})
+
+test('keeps the optional YAML example comment-only and complete', () => {
+  const example = readFileSync(join(PROJECT_ROOT, 'config.example.yaml'), 'utf8')
+  const fields = [
+    'host:',
+    'port:',
+    'database_url:',
+    'database_pool_size:',
+    'database_acquire_timeout_ms:',
+    'sqlite_busy_timeout_ms:',
+    'log_level:',
+    'shutdown_readiness_delay_ms:',
+    'shutdown_timeout_ms:',
+  ]
+  for (const field of fields) {
+    assert.equal(example.includes(field), true, field)
+  }
+  assert.equal(
+    example.split('\n').every((line) => line.trim() === '' || line.trimStart().startsWith('#')),
+    true,
+  )
 })
 
 test('diagnoses the required path without requiring Docker', async () => {
@@ -144,7 +166,7 @@ test('treats the backend port as blocking and optional ports as warnings', async
   }
   const results = await diagnose({
     command,
-    env: { APP_PORT: '8000', POSTGRES_PORT: '5432' },
+    env: { APP_PORT: '8000' },
     nodeVersion: '24.19.0',
     probe: async (port) => ({ available: ![8000, 5173, 5432].includes(port) }),
   })
@@ -173,11 +195,10 @@ test('detects a port already bound by another process', async () => {
   }
 })
 
-test('prepares local files idempotently without overwriting .env', () => {
+test('prepares the unified local data directory idempotently without dotenv files', () => {
   const root = mkdtempSync(join(tmpdir(), 'toolchain-bootstrap-test-'))
   try {
     mkdirSync(join(root, 'front'), { recursive: true })
-    writeFileSync(join(root, '.env.example'), 'APP_PORT=8000\n')
     const commands = []
     assert.throws(
       () => bootstrap(root, () => ({ status: 23 })),
@@ -191,17 +212,18 @@ test('prepares local files idempotently without overwriting .env', () => {
     }
 
     const first = bootstrap(root, runner)
-    assert.equal(first.environmentAction, 'created')
     assert.equal(existsSync(first.dataDirectory), true)
-    assert.equal(readFileSync(join(root, '.env'), 'utf8'), 'APP_PORT=8000\n')
+    for (const child of ['config', 'db', 'storage', 'logs']) {
+      assert.equal(existsSync(join(first.dataDirectory, child)), true)
+    }
+    assert.equal(existsSync(join(root, '.env')), false)
     assert.deepEqual(commands, [
       { name: 'npm', args: ['--prefix', 'front', 'ci'], cwd: root },
     ])
 
-    writeFileSync(join(root, '.env'), 'APP_PORT=9000\n')
     const second = prepareLocalEnvironment(root)
-    assert.equal(second.environmentAction, 'preserved')
-    assert.equal(readFileSync(join(root, '.env'), 'utf8'), 'APP_PORT=9000\n')
+    assert.equal(second.dataDirectory, first.dataDirectory)
+    assert.equal(existsSync(join(root, '.env')), false)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
