@@ -15,5 +15,4 @@ front/dist
 *.log
 .env
 .env.*
-!.env.example
 config.local.yaml

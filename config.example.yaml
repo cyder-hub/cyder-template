@@ -1,0 +1,27 @@
+# This checked-in path is documentation only; the application never reads it.
+# Copy it to ${APP_DATA_DIR}/config/config.yaml, then uncomment only the
+# settings that differ from the built-in defaults. APP_* environment variables
+# explicitly provided by the caller take precedence over this file.
+
+# host: 127.0.0.1
+# port: 8000
+
+# With no explicit URL, SQLite uses:
+#   ${APP_DATA_DIR}/db/cyder-template.sqlite
+# PostgreSQL URLs may use postgres:// or postgresql://.
+# database_url: .app/dev/db/cyder-template.sqlite
+
+# When omitted, SQLite uses 1 connection and PostgreSQL uses 5.
+# database_pool_size: 1
+# database_acquire_timeout_ms: 30000
+
+# Applies only to SQLite. Zero disables lock waiting.
+# sqlite_busy_timeout_ms: 5000
+
+# Any valid tracing EnvFilter expression is accepted.
+# log_level: info
+
+# On SIGTERM or Ctrl-C, fail readiness for this long before draining.
+# shutdown_readiness_delay_ms: 1000
+# Total budget from signal receipt, including the readiness delay.
+# shutdown_timeout_ms: 8000

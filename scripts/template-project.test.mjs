@@ -178,7 +178,7 @@ function assertInitializedFixture(fixture, expected) {
     'utf8',
   )
   assert.equal(workflow.includes('template-init:'), false)
-  assert.equal(workflow.includes('TEMPLATE_INIT_ANSWERS'), false)
+  assert.equal(workflow.includes('DEV_TEMPLATE_INIT_ANSWERS'), false)
   assert.equal(workflow.includes('Test template initialization contract'), false)
   assert.equal(
     readFileSync(join(fixture.repository, 'front/index.html'), 'utf8').includes(
@@ -269,7 +269,7 @@ test('initializes a renamed project while keeping examples', () => {
     assert.equal(repeat.status, 0, repeat.stderr)
     assert.match(repeat.stdout, /already initialized/)
 
-    if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
+    if (process.env.DEV_TEMPLATE_INTEGRATION === '1') {
       run('just', ['bootstrap'], { cwd: fixture.repository })
       run('just', ['check'], {
         cwd: fixture.repository,
@@ -299,7 +299,7 @@ test('initializes a renamed project and strips examples', () => {
     assert.equal(result.status, 0, result.stderr)
     assertInitializedFixture(fixture, answers)
 
-    if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
+    if (process.env.DEV_TEMPLATE_INTEGRATION === '1') {
       run('just', ['bootstrap'], { cwd: fixture.repository })
       run('just', ['check'], {
         cwd: fixture.repository,
@@ -316,7 +316,7 @@ test('initializes a renamed project and strips examples', () => {
       })
     }
   } finally {
-    if (process.env.TEMPLATE_PROJECT_INTEGRATION === '1') {
+    if (process.env.DEV_TEMPLATE_INTEGRATION === '1') {
       run('docker', ['image', 'rm', '--force', image], { allowFailure: true })
     }
     fixture.cleanup()

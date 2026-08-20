@@ -62,5 +62,5 @@ jobs:
 
       - name: Test initialized project variants
         env:
-          TEMPLATE_PROJECT_INTEGRATION: "1"
+          DEV_TEMPLATE_INTEGRATION: "1"
         run: node --test scripts/template-project.test.mjs

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
@@ -19,17 +19,11 @@ export function installLockedFrontendDependencies(root = PROJECT_ROOT, runner = 
 }
 
 export function prepareLocalEnvironment(root = PROJECT_ROOT) {
-  const dataDirectory = join(root, '.app', 'dev', 'db')
-  mkdirSync(dataDirectory, { recursive: true })
-
-  const environmentPath = join(root, '.env')
-  let environmentAction = 'preserved'
-  if (!existsSync(environmentPath)) {
-    copyFileSync(join(root, '.env.example'), environmentPath)
-    environmentAction = 'created'
+  const dataDirectory = join(root, '.app', 'dev')
+  for (const child of ['config', 'db', 'storage', 'logs']) {
+    mkdirSync(join(dataDirectory, child), { recursive: true })
   }
-
-  return { dataDirectory, environmentAction, environmentPath }
+  return { dataDirectory }
 }
 
 export function bootstrap(root = PROJECT_ROOT, runner = spawnSync) {
@@ -45,11 +39,6 @@ if (isMainModule()) {
   try {
     const result = bootstrap()
     console.log(`Prepared local data directory: ${result.dataDirectory}`)
-    if (result.environmentAction === 'created') {
-      console.log(`Created ${result.environmentPath} from .env.example.`)
-    } else {
-      console.log(`Preserved existing ${result.environmentPath}.`)
-    }
     console.log('Bootstrap complete. Run `just dev` to start the application.')
   } catch (error) {
     console.error(`bootstrap failed: ${error.message}`)

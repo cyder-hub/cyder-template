@@ -52,7 +52,7 @@ just bootstrap
 just dev
 ```
 
-`just bootstrap` checks the required toolchain and local ports, installs the locked frontend dependencies with `npm ci`, creates `.app/dev/db`, and creates `.env` from `.env.example` only when `.env` is absent. It never overwrites an existing local environment file. Docker and its Compose plugin are optional for the default SQLite path, so unavailable container tooling is reported as a warning.
+`just bootstrap` checks the required toolchain and local ports, installs the locked frontend dependencies with `npm ci`, and creates `.app/dev/{config,db,storage,logs}`. It does not create or load `.env`; export development overrides in your shell or configure them in your process manager. Docker and its Compose plugin are optional for the default SQLite path, so unavailable container tooling is reported as a warning.
 
 `just dev` asks the Rust configuration loader for the backend's resolved endpoint, starts the backend and Vite dev server in parallel, and injects the corresponding HTTP origin into Vite. The default remains `127.0.0.1:8000`; changing `APP_PORT` or the selected YAML configuration keeps the proxy aligned automatically. When `APP_DATA_DIR` is not set, the backend uses `.app/dev` and creates the SQLite database at `.app/dev/db/cyder-template.sqlite`.
 
@@ -73,10 +73,12 @@ just front-ci-deps       # npm ci
 just build               # backend release binary and frontend dist
 just test                # backend tests and frontend type checks
 just test-postgres       # optional PostgreSQL integration tests
+just check-config        # side-effect-free strict configuration validation
 just lint-backend        # strict Rust lints for all targets/features
 just check               # toolchain contracts, fmt, lint, tests, build
 just audit               # locked dependency advisories and policy
 just docker-build        # local Docker image build
+just test-container-config # configuration and data-layout image contract
 just test-container-shutdown # graceful SIGTERM test for the local image
 ```
 
@@ -106,31 +108,49 @@ The explicit target takes precedence and skips backend configuration lookup. It 
 
 ## Configuration
 
-The backend loads built-in defaults, then an optional YAML file, then `APP_*` environment variables. Set `APP_CONFIG_PATH` to choose a YAML file:
+The backend is designed to start with no configuration. It resolves values in this order, from highest to lowest priority:
+
+- Explicit `APP_*` environment variables.
+- An optional YAML configuration file.
+- Built-in defaults.
+
+`APP_DATA_DIR` is an environment-only bootstrap setting. It defaults to `.app/dev` for source checkouts; the image sets it to `/data`. The backend automatically reads `<APP_DATA_DIR>/config/config.yaml` when that file exists. If `APP_CONFIG_PATH` is explicitly set, that exact file is required and a missing, unreadable, or non-file path fails immediately.
+
+The application does not parse `.env` files, and `just` does not load them. Environment injection belongs to the shell, container runtime, systemd, Kubernetes, or another deployment tool. `config.example.yaml` is a comment-only reference and is never loaded automatically.
+
+The zero-configuration defaults are:
+
+| Setting | Default |
+| --- | --- |
+| `APP_DATA_DIR` | `.app/dev` from source; `/data` in the image |
+| `APP_CONFIG_PATH` | `<data-dir>/config/config.yaml`, optional |
+| `APP_HOST` | `127.0.0.1` from source; `0.0.0.0` in the image |
+| `APP_PORT` | `8000` |
+| `APP_DATABASE_URL` | `<data-dir>/db/cyder-template.sqlite` |
+| `APP_DATABASE_POOL_SIZE` | `1` for SQLite; `5` for PostgreSQL |
+| `APP_DATABASE_ACQUIRE_TIMEOUT_MS` | `30000` |
+| `APP_SQLITE_BUSY_TIMEOUT_MS` | `5000` |
+| `APP_LOG_LEVEL` | `info` |
+| `APP_SHUTDOWN_READINESS_DELAY_MS` | `1000` |
+| `APP_SHUTDOWN_TIMEOUT_MS` | `8000` |
+
+YAML uses the same names without the `APP_` prefix. Environment variables override YAML values:
 
 ```bash
-cp config.sample.yaml config.local.yaml
-APP_CONFIG_PATH=config.local.yaml just dev-backend
+APP_PORT=9000 just dev
+APP_CONFIG_PATH=/path/to/config.yaml just dev-backend
 ```
 
-Common environment overrides:
+Validate deployment configuration without connecting to a database, running migrations, creating files, or opening a listener:
 
 ```bash
-APP_HOST=127.0.0.1
-APP_PORT=8000
-APP_DATA_DIR=.app/dev
-APP_DATABASE_URL=.app/dev/db/cyder-template.sqlite
-APP_DATABASE_POOL_SIZE=1
-APP_DATABASE_ACQUIRE_TIMEOUT_MS=30000
-APP_SQLITE_BUSY_TIMEOUT_MS=5000
-APP_ID_WORKER_ID=1
-APP_LOG_LEVEL=info
-APP_PUBLIC_DIR=front/dist
-APP_SHUTDOWN_READINESS_DELAY_MS=1000
-APP_SHUTDOWN_TIMEOUT_MS=8000
+just check-config
+cargo run -p cyder-template -- config check --strict --format json
 ```
 
-`just bootstrap` copies `.env.example` to `.env` when the local file is absent. You can also copy it manually; `just` recipes load `.env` overrides automatically.
+Recognized values are always validated. During normal startup, unknown or removed YAML fields and `APP_*` names produce warnings without showing their values, which lets an upgraded service remain available while operators correct stale configuration. Strict checks reject those keys and are intended for CI and deployment gates. PostgreSQL summaries report only the backend kind and effective pool settings; database URLs and passwords are never included.
+
+When upgrading an older checkout, adopt the current Compose file or remove the retired worker-ID, public-directory, and test-database `APP_*` settings. An explicitly retained `APP_CONFIG_PATH` must point to a real file; remove it to use the optional default under the data directory. Run `just check-config` against the deployment environment before replacing a running container.
 
 The application binary exposes the non-sensitive resolved listen endpoint for local development tooling:
 
@@ -141,14 +161,9 @@ cargo run -p cyder-template -- config endpoint --format json
 
 Rust remains the only application configuration parser. `just dev` consumes this JSON contract and converts unspecified bind addresses to usable local connection addresses: `0.0.0.0` becomes `127.0.0.1`, and `::` becomes `::1`. Other hosts and the resolved port are preserved. Port `0` cannot be used for automatic proxy derivation.
 
-For example, both environment and YAML overrides flow through the same Rust resolver:
-
-```bash
-APP_PORT=9000 just dev
-APP_CONFIG_PATH=config.local.yaml just dev
-```
-
 `DEV_PROXY_TARGET` is a development orchestration variable, not an `APP_*` backend setting. Production does not use this proxy contract: the Rust process loads its configuration directly and serves the built frontend on the same origin.
+
+The frontend location is not configurable. Source and release runs use `front/dist`; the image stores the same immutable artifact at `/app/front/dist`. Persisted state belongs under the one data root: `config/`, `db/`, `storage/`, and the reserved `logs/` directory. The service currently logs to stdout/stderr, while temporary files belong under `/tmp/cyder-template`.
 
 ## Databases
 
@@ -160,25 +175,25 @@ SQLite is the default development database. No external service is required:
 just dev-backend
 ```
 
-The default SQLite pool size is `1` for a conservative local path. File-backed SQLite may use `APP_DATABASE_POOL_SIZE` greater than `1`; each pooled connection enables WAL mode, `APP_SQLITE_BUSY_TIMEOUT_MS`, and foreign keys. This helps read concurrency and short write-lock waits, but SQLite still has one writer at a time and should not be treated like PostgreSQL for parallel writes. Plain `:memory:` SQLite is kept to one effective pooled connection so migrations and queries see the same in-memory schema.
+The default SQLite pool size is `1` for a conservative local path. File-backed SQLite may use an explicit `APP_DATABASE_POOL_SIZE` greater than `1`; each pooled connection enables WAL mode, `APP_SQLITE_BUSY_TIMEOUT_MS`, and foreign keys. This helps read concurrency and short write-lock waits, but SQLite still has one writer at a time and should not be treated like PostgreSQL for parallel writes. Plain `:memory:` SQLite requires an effective pool size of `1` so migrations and queries see the same in-memory schema.
 
-Generated IDs use a 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 worker bits, and 12 sequence bits. Set `APP_ID_WORKER_ID` to a unique value from `0` to `255` for each running instance.
+Generated IDs retain the 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 worker bits, and 12 sequence bits. This template deliberately supports one application instance and uses one internal worker ID. Do not scale the application horizontally without first replacing the ID and migration ownership strategy; stale worker-ID settings now warn during normal startup and fail strict configuration checks.
 
 Use PostgreSQL by setting `APP_DATABASE_URL`:
 
 ```bash
-APP_DATABASE_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template APP_DATABASE_POOL_SIZE=5 just dev-backend
+APP_DATABASE_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template just dev-backend
 ```
 
-The service detects the backend from the URL and runs the matching embedded Diesel migrations at startup. `APP_DATABASE_ACQUIRE_TIMEOUT_MS` controls how long a request waits for a pooled connection before failing readiness or database operations.
+The service detects the backend from the URL, defaults PostgreSQL to a pool of `5`, and runs the matching embedded Diesel migrations at startup. `APP_DATABASE_ACQUIRE_TIMEOUT_MS` controls how long a request waits for a pooled connection before failing readiness or database operations.
 
-PostgreSQL integration tests are opt-in because they need a disposable database. Point `APP_TEST_POSTGRES_URL` at an isolated test database, then run:
+PostgreSQL integration tests are opt-in because they need a disposable database. Point `DEV_POSTGRES_TEST_URL` at an isolated test database, then run:
 
 ```bash
-APP_TEST_POSTGRES_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
+DEV_POSTGRES_TEST_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
 ```
 
-The PostgreSQL test uses a pool size greater than one and covers migrations and readiness. Without `APP_TEST_POSTGRES_URL`, the ignored PostgreSQL test is not part of the default `cargo test --workspace` path.
+The PostgreSQL test uses a pool size greater than one and covers migrations and readiness. Without `DEV_POSTGRES_TEST_URL`, the ignored PostgreSQL test is not part of the default `cargo test --workspace` path.
 
 The compose setup creates `cyder_template_test` only when PostgreSQL initializes a fresh volume. If you already have a local compose volume, create a separate test database manually or recreate the local volume before running the PostgreSQL integration test.
 
@@ -243,7 +258,7 @@ npm --prefix front run build
 npm --prefix front test
 ```
 
-The production backend serves `front/dist` from `APP_PUBLIC_DIR` after `just build-front`.
+The production backend serves the fixed `front/dist` artifact after `just build-front`.
 
 ## Docker And Compose
 
@@ -262,19 +277,20 @@ docker build -t cyder-template:local -f Dockerfile .
 Run the image with its default SQLite database:
 
 ```bash
-docker run --rm -p 8000:8000 -v "$PWD/.app/docker:/data/app" cyder-template:local
+docker run --rm -p 8000:8000 -v "$PWD/.app/docker:/data" cyder-template:local
 ```
 
-The image runs the service as a non-root `app` user. Its entrypoint creates `config`, `db`, `storage`, and `tmp` directories under `APP_DATA_DIR`, which defaults to `/data/app` in the container.
+The image keeps versioned, immutable artifacts under `/app` and runs commands as the non-root UID/GID `10001`. When starting a runtime command, its entrypoint creates missing `config`, `db`, `storage`, and `logs` directories under `/data` without recursively changing an existing volume's ownership. Configuration and help commands skip this preparation, so validation also works against an empty read-only `/data` mount without changing it. Mounting `/data` is the simplest way to preserve every application-owned resource; advanced deployments may mount individual subdirectories. Ensure mounted paths are writable by UID/GID `10001` when starting the service.
+
+The image healthcheck resolves configuration through the application binary before requesting `/readyz`, so a port supplied by the mounted YAML file or `APP_PORT` is probed consistently with the running service.
 
 Run PostgreSQL and the app together with compose:
 
 ```bash
-cp .env.example .env
 docker compose up --build
 ```
 
-Compose builds the same `cyder-template:local` image, starts a local PostgreSQL service with a healthcheck, and points `APP_DATABASE_URL` at that service. Compose uses `COMPOSE_APP_DATABASE_POOL_SIZE`, defaulting to `5`, so PostgreSQL keeps a larger pool than the local SQLite default. The compose credentials in `.env.example` are local-development examples. Choose real credentials for shared or deployed environments.
+Compose builds the same `cyder-template:local` image, starts a local PostgreSQL service with a healthcheck, points `APP_DATABASE_URL` at that service, and mounts the application `/data` root. Its fixed credentials and exposed PostgreSQL port are development conveniences, not production defaults. PostgreSQL automatically receives the pool default of `5`.
 
 ## Automation
 
@@ -282,7 +298,7 @@ This repository includes `.github/workflows/ci.yml`. The workflow runs on pull r
 
 - `Backend`: activates Rust 1.97.1 from `rust-toolchain.toml` with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
 - `Frontend`: reads Node 24.19.0 from `.node-version`, checks the toolchain/bootstrap contracts, runs locked npm install, type checks through `npm test`, and builds the Vite app.
-- `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, builds `cyder-template:ci`, then starts it and verifies graceful SIGTERM handling within Docker's default stop deadline.
+- `Docker`: waits for backend and frontend jobs, validates `docker-compose.yml`, builds `cyder-template:ci`, checks its safe configuration/data-layout contract, then verifies graceful SIGTERM handling within Docker's default stop deadline.
 
 Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Update `.node-version`, `rust-toolchain.toml`, package metadata, and Docker build arguments together; `just test-toolchain` rejects version drift.
 

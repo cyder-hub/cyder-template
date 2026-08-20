@@ -40,24 +40,21 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY --from=backend /workspace/target/release/cyder-template /usr/local/bin/cyder-template
-COPY --from=frontend /workspace/front/dist /app/public
-COPY docker-entrypoint /usr/local/bin/docker-entrypoint
+COPY --from=backend /workspace/target/release/cyder-template /app/bin/cyder-template
+COPY --from=frontend /workspace/front/dist /app/front/dist
+COPY docker-entrypoint /app/bin/docker-entrypoint
 
-RUN chmod +x /usr/local/bin/docker-entrypoint \
-    && mkdir -p /data/app \
-    && chown -R app:app /app /data/app
+RUN chmod +x /app/bin/docker-entrypoint \
+    && mkdir -p /data/config /data/db /data/storage /data/logs /tmp/cyder-template \
+    && chown -R app:app /app /data /tmp/cyder-template
 
 ENV APP_HOST=0.0.0.0 \
-    APP_PORT=8000 \
-    APP_DATA_DIR=/data/app \
-    APP_PUBLIC_DIR=/app/public \
-    APP_CONFIG_PATH=/data/app/config/config.yaml
+    APP_DATA_DIR=/data
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/readyz >/dev/null || exit 1
+    CMD ["gosu", "app", "/app/bin/cyder-template", "healthcheck"]
 
-ENTRYPOINT ["docker-entrypoint"]
-CMD ["cyder-template"]
+ENTRYPOINT ["/app/bin/docker-entrypoint"]
+CMD ["/app/bin/cyder-template"]

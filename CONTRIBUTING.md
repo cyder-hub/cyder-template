@@ -13,7 +13,7 @@ just doctor
 just bootstrap
 ```
 
-`just bootstrap` uses `npm ci`, creates the ignored local data directory, and creates `.env` only when it does not already exist. It does not install global tools or start services. Use `just --list` to inspect the local command surface.
+`just bootstrap` uses `npm ci` and creates the ignored `.app/dev/{config,db,storage,logs}` data layout. It does not create or load `.env`, install global tools, or start services. Use `just --list` to inspect the local command surface.
 
 ## Verification
 
@@ -30,6 +30,7 @@ npm --prefix front run build
 just audit
 docker compose -f docker-compose.yml config
 docker build -t cyder-template:ci -f Dockerfile .
+bash scripts/test-container-config.sh cyder-template:ci
 ```
 
 The shorter project shortcut is:
@@ -43,10 +44,10 @@ just check
 When database changes affect persistence, include the relevant backend coverage in the pull request notes. SQLite changes should usually include `cargo test --workspace`, which covers file-backed SQLite migrations, readiness, and CRUD. PostgreSQL behavior is covered by the opt-in integration test against an isolated test database:
 
 ```bash
-APP_TEST_POSTGRES_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
+DEV_POSTGRES_TEST_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
 ```
 
-Do not point `APP_TEST_POSTGRES_URL` at production, shared, or long-lived data.
+Do not point `DEV_POSTGRES_TEST_URL` at production, shared, or long-lived data.
 
 ## Pull Requests
 
