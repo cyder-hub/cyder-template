@@ -29,7 +29,7 @@ const DEFAULT_HTTP_MAX_REQUEST_BODY_BYTES: u64 = 1_048_576;
 const MIN_HTTP_MAX_REQUEST_BODY_BYTES: u64 = 1;
 const MAX_HTTP_MAX_REQUEST_BODY_BYTES: u64 = 67_108_864;
 const DEFAULT_CONFIG_RELATIVE_PATH: &str = "config/config.yaml";
-const DEFAULT_DATABASE_RELATIVE_PATH: &str = "db/cyder-template.sqlite";
+const DEFAULT_DATABASE_RELATIVE_PATH: &str = "db/cyder-music.sqlite";
 
 const RUNTIME_ENVIRONMENT_KEYS: &[&str] =
     &["APP_HOST", "APP_PORT", "APP_DATABASE_URL", "APP_LOG_LEVEL"];
@@ -64,13 +64,6 @@ impl DatabaseUrl {
     pub fn sqlite_memory() -> Self {
         Self(":memory:".to_string())
     }
-
-    // template-example:start
-    #[cfg(test)]
-    pub fn sqlite_path(path: impl Into<String>) -> Self {
-        Self(path.into())
-    }
-    // template-example:end
 
     fn parse(value: String) -> Result<(Self, DatabaseKind), ConfigValidationError> {
         validate_non_empty_string("database_url", &value)?;
@@ -745,7 +738,7 @@ mod tests {
         assert_eq!(resolved.config.http_max_request_body_bytes, 1_048_576);
         assert_eq!(
             resolved.config.database_url.as_str(),
-            ".app/dev/db/cyder-template.sqlite"
+            ".app/dev/db/cyder-music.sqlite"
         );
         assert!(resolved.warnings.is_empty());
     }

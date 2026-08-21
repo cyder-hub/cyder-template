@@ -1,9 +1,5 @@
 # Contributing
 
-<!-- template-init:start -->
-This repository is a GitHub template for a Rust backend and Vue frontend. Contributions should improve the template itself: correctness, documentation, local developer workflow, CI, Docker, and generic example resources.
-<!-- template-init:end -->
-
 ## Local Setup
 
 Install the versions listed in `README.md`, then diagnose and prepare the checkout:
@@ -29,8 +25,8 @@ npm --prefix front test
 npm --prefix front run build
 just audit
 docker compose -f docker-compose.yml config
-docker build -t cyder-template:ci -f Dockerfile .
-bash scripts/test-container-config.sh cyder-template:ci
+docker build -t cyder-music:ci -f Dockerfile .
+bash scripts/test-container-config.sh cyder-music:ci
 ```
 
 The shorter project shortcut is:
@@ -44,7 +40,7 @@ just check
 When database changes affect persistence, include the relevant backend coverage in the pull request notes. SQLite changes should usually include `cargo test --workspace`, which covers file-backed SQLite migrations, readiness, and CRUD. PostgreSQL behavior is covered by the opt-in integration test against an isolated test database:
 
 ```bash
-DEV_POSTGRES_TEST_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
+DEV_POSTGRES_TEST_URL=postgres://cyder_music:cyder_music_dev@127.0.0.1:5432/cyder_music_test just test-postgres
 ```
 
 Do not point `DEV_POSTGRES_TEST_URL` at production, shared, or long-lived data.
@@ -59,11 +55,6 @@ Before opening a pull request:
 - Do not commit real credentials, tokens, private endpoints, or machine-specific config.
 - Keep the main README in English.
 - Do not add product claims for features the project does not implement, such as authentication, authorization, teams, tenants, or production deployment automation.
-<!-- template-init:start -->
-- Update README and initialization guidance when changing project identity fields, Docker image names, database defaults, or automation commands.
-- Run `just test-template-init` when changing the initializer, example boundaries, or project identity touchpoints.
-- Run the manual `Template Integration` workflow before merging changes that alter initialization or example-cleanup behavior.
-<!-- template-init:end -->
 
 ## Code Style
 
@@ -83,7 +74,7 @@ npm --prefix front run build
 npm --prefix front outdated --json
 just audit
 docker compose -f docker-compose.yml config
-docker build -t cyder-template:ci -f Dockerfile .
+docker build -t cyder-music:ci -f Dockerfile .
 ```
 
 The direct commands above match the publishing checklist. In `npm --prefix front outdated --json`, every `current` version should match `wanted`; record intentionally deferred major-version upgrades when `latest` is newer.

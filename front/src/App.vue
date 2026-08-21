@@ -1,10 +1,6 @@
 <script setup lang="ts">
 const navItems = [
   { label: 'Dashboard', to: '/' },
-  // template-example:start
-  { label: 'Items', to: '/items' },
-  { label: 'Users', to: '/users' },
-  // template-example:end
 ]
 </script>
 
@@ -12,8 +8,8 @@ const navItems = [
   <div class="app-root">
     <aside class="app-sidebar" aria-label="Primary navigation">
       <RouterLink class="brand" to="/">
-        <span class="brand-mark">A</span>
-        <span>cyder-template</span>
+        <span class="brand-mark">C</span>
+        <span>Cyder Music</span>
       </RouterLink>
 
       <nav class="nav-list">
@@ -31,8 +27,8 @@ const navItems = [
     <div class="app-main">
       <header class="mobile-header">
         <RouterLink class="brand" to="/">
-          <span class="brand-mark">A</span>
-          <span>cyder-template</span>
+          <span class="brand-mark">C</span>
+          <span>Cyder Music</span>
         </RouterLink>
       </header>
 

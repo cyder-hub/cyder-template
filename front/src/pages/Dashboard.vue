@@ -14,23 +14,6 @@ const statusLabel = computed(() => {
   return app.isReady ? 'Ready' : 'Unknown'
 })
 
-// template-example:start
-const resources = [
-  {
-    name: 'Items',
-    description: 'Example task-like records backed by the Rust API.',
-    endpoint: '/api/items',
-    to: '/items',
-  },
-  {
-    name: 'Users',
-    description: 'Example people records for CRUD workflows, not authentication.',
-    endpoint: '/api/users',
-    to: '/users',
-  },
-]
-// template-example:end
-
 onMounted(() => {
   void app.refreshStatus()
 })
@@ -41,7 +24,7 @@ onMounted(() => {
     <div class="page-shell">
       <section class="page-header">
         <div>
-          <p class="eyebrow">Rust + Vue template</p>
+          <p class="eyebrow">Rust + Vue application</p>
           <h1>Operator dashboard</h1>
           <p class="page-description">
             Monitor the service health, database connection, and application runtime baseline.
@@ -84,29 +67,6 @@ onMounted(() => {
         </dl>
       </section>
 
-      <!-- template-example:start -->
-      <section id="resources" class="resource-section" aria-labelledby="resources-title">
-        <div class="section-heading">
-          <h2 id="resources-title">Resource entry points</h2>
-          <p>Open the example CRUD pages wired to the backend API.</p>
-        </div>
-
-        <div class="resource-list">
-          <article v-for="resource in resources" :key="resource.name" class="resource-row">
-            <div>
-              <h3>{{ resource.name }}</h3>
-              <p>{{ resource.description }}</p>
-            </div>
-            <div class="resource-actions">
-              <code>{{ resource.endpoint }}</code>
-              <RouterLink class="secondary-button secondary-button--compact" :to="resource.to">
-                Open
-              </RouterLink>
-            </div>
-          </article>
-        </div>
-      </section>
-      <!-- template-example:end -->
     </div>
   </main>
 </template>
