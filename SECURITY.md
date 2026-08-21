@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are handled on the current `main` branch. This template has not published separate long-term support branches.
+Security fixes are handled on the current `main` branch. This project has not published separate long-term support branches.
 
 ## Reporting A Vulnerability
 

@@ -18,7 +18,6 @@ import { fileURLToPath } from 'node:url'
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url))
 const PROJECT_ROOT = resolve(SCRIPT_DIRECTORY, '..')
 const STATE_PATH = '.template-state.json'
-const STATE_SCHEMA_VERSION = 1
 const TEMPLATE_MARKER = 'template-init'
 const EXAMPLE_MARKER = 'template-example'
 
@@ -30,7 +29,7 @@ const TEMPLATE_MARKER_FILES = new Map([
 ])
 
 const EXAMPLE_MARKER_FILES = new Map([
-  ['README.md', 3],
+  ['README.md', 2],
   ['server/src/app.rs', 4],
   ['server/src/config.rs', 1],
   ['server/src/controller/mod.rs', 1],
@@ -47,8 +46,17 @@ const EXAMPLE_MARKER_FILES = new Map([
 ])
 
 const TEMPLATE_ONLY_FILES = [
-  '.github/workflows/template-integration.yml',
+  STATE_PATH,
+  'scripts/init-project.mjs',
+  'scripts/template-project.mjs',
   'scripts/template-project.test.mjs',
+]
+
+const BLOCKING_LOCAL_PATHS = [
+  '.app',
+  'target',
+  'front/dist',
+  'front/node_modules',
 ]
 
 const EXAMPLE_FILES = [
@@ -154,27 +162,36 @@ function requireCleanWorktree(root) {
   }
 }
 
-function readState(root) {
+function requireNoLocalArtifacts(root) {
+  const present = BLOCKING_LOCAL_PATHS.filter((path) => existsSync(join(root, path)))
+  if (present.length) {
+    fail(
+      `initialize from a clean template checkout; remove or move local paths first: ${present.join(', ')}`,
+    )
+  }
+}
+
+function readTemplateIdentity(root) {
   const path = join(root, STATE_PATH)
   if (!existsSync(path)) {
-    fail(`${STATE_PATH} is missing; this repository is not a supported template state`)
+    fail(`${STATE_PATH} is missing; this repository is not an initializable template`)
   }
 
-  let state
+  let manifest
   try {
-    state = JSON.parse(readFileSync(path, 'utf8'))
+    manifest = JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
     fail(`${STATE_PATH} is invalid JSON: ${error.message}`)
   }
 
-  if (state.schemaVersion !== STATE_SCHEMA_VERSION) {
-    fail(`unsupported template state schema version '${state.schemaVersion}'`)
-  }
-  if (!['template', 'initialized'].includes(state.status)) {
-    fail(`unsupported template status '${state.status}'`)
-  }
-  if (!['present', 'stripped'].includes(state.examples)) {
-    fail(`unsupported example status '${state.examples}'`)
+  if (
+    !manifest ||
+    Array.isArray(manifest) ||
+    typeof manifest !== 'object' ||
+    Object.keys(manifest).length !== 1 ||
+    !Object.hasOwn(manifest, 'identity')
+  ) {
+    fail(`${STATE_PATH} must contain only the current template identity`)
   }
 
   const requiredIdentityFields = [
@@ -185,12 +202,15 @@ function readState(root) {
     'githubRepository',
   ]
   for (const field of requiredIdentityFields) {
-    if (typeof state.identity?.[field] !== 'string' || !state.identity[field]) {
+    if (typeof manifest.identity?.[field] !== 'string' || !manifest.identity[field]) {
       fail(`${STATE_PATH} is missing identity.${field}`)
     }
   }
+  if (Object.keys(manifest.identity).length !== requiredIdentityFields.length) {
+    fail(`${STATE_PATH} identity contains unsupported fields`)
+  }
 
-  return state
+  return manifest.identity
 }
 
 export function deriveIdentity(projectSlug, displayName, githubRepository) {
@@ -526,14 +546,6 @@ function removeFiles(tree, paths) {
   }
 }
 
-function updateStateEntry(tree, state) {
-  const entry = tree.get(STATE_PATH)
-  if (!entry) {
-    fail(`${STATE_PATH} must be tracked`)
-  }
-  entry.buffer = Buffer.from(`${JSON.stringify(state, null, 2)}\n`)
-}
-
 function refreshEmptyMigrationEmbeds(tree) {
   const path = 'server/src/database/mod.rs'
   const entry = tree.get(path)
@@ -556,49 +568,28 @@ function refreshEmptyMigrationEmbeds(tree) {
   entry.buffer = Buffer.from(text)
 }
 
-function planInitialization(snapshot, state, target, keepExamples) {
+function planInitialization(snapshot, sourceIdentity, target) {
   requireFiles(snapshot, TEMPLATE_ONLY_FILES, 'initialize the project')
-  if (!keepExamples) {
-    requireFiles(snapshot, EXAMPLE_FILES, 'strip example resources')
-  }
+  requireFiles(snapshot, EXAMPLE_FILES, 'remove example resources')
 
   const tree = cloneTree(snapshot)
-  removeFiles(tree, TEMPLATE_ONLY_FILES)
 
   for (const [path, entry] of tree) {
     if (!isText(entry.buffer) || path === STATE_PATH) {
       continue
     }
     let text = entry.buffer.toString('utf8')
-    text = applyDisplayIdentity(path, text, state.identity, target)
-    text = replaceIdentity(text, state.identity, target)
+    text = applyDisplayIdentity(path, text, sourceIdentity, target)
+    text = replaceIdentity(text, sourceIdentity, target)
     entry.buffer = Buffer.from(text)
   }
 
-  transformMarkers(tree, TEMPLATE_MARKER, TEMPLATE_MARKER_FILES)
-  if (!keepExamples) {
-    removeFiles(tree, EXAMPLE_FILES)
-    transformMarkers(tree, EXAMPLE_MARKER, EXAMPLE_MARKER_FILES)
-    refreshEmptyMigrationEmbeds(tree)
-  }
-
-  updateStateEntry(tree, {
-    schemaVersion: STATE_SCHEMA_VERSION,
-    status: 'initialized',
-    identity: target,
-    examples: keepExamples ? 'present' : 'stripped',
-  })
-  verifyNoSourceIdentity(tree, state.identity)
-  return tree
-}
-
-function planExampleCleanup(snapshot, state) {
-  requireFiles(snapshot, EXAMPLE_FILES, 'strip example resources')
-  const tree = cloneTree(snapshot)
   removeFiles(tree, EXAMPLE_FILES)
+  transformMarkers(tree, TEMPLATE_MARKER, TEMPLATE_MARKER_FILES)
   transformMarkers(tree, EXAMPLE_MARKER, EXAMPLE_MARKER_FILES)
   refreshEmptyMigrationEmbeds(tree)
-  updateStateEntry(tree, { ...state, examples: 'stripped' })
+  removeFiles(tree, TEMPLATE_ONLY_FILES)
+  verifyNoSourceIdentity(tree, sourceIdentity)
   return tree
 }
 
@@ -717,76 +708,60 @@ function writeTreeTransaction(root, before, after, validate) {
   }
 }
 
-function validateWrittenProject(root, expectedState) {
-  const state = readState(root)
-  if (JSON.stringify(state) !== JSON.stringify(expectedState)) {
-    fail('written template state does not match the planned state')
-  }
-
+function validateWrittenProject(root, expectedIdentity) {
   const cargoManifest = readFileSync(join(root, 'server/Cargo.toml'), 'utf8')
-  const expectedCargoName = `name = "${state.identity.projectSlug}"`
+  const expectedCargoName = `name = "${expectedIdentity.projectSlug}"`
   if (
     (cargoManifest.split(expectedCargoName).length - 1) !== 2 ||
-    !cargoManifest.includes(`default-run = "${state.identity.projectSlug}"`)
+    !cargoManifest.includes(`default-run = "${expectedIdentity.projectSlug}"`)
   ) {
     fail('server/Cargo.toml package, default-run, and binary names are inconsistent')
   }
   const cargoLock = readFileSync(join(root, 'Cargo.lock'), 'utf8')
-  if (!cargoLock.includes(`name = "${state.identity.projectSlug}"`)) {
+  if (!cargoLock.includes(`name = "${expectedIdentity.projectSlug}"`)) {
     fail('Cargo.lock does not contain the initialized Rust package name')
   }
 
   const frontendPackage = JSON.parse(readFileSync(join(root, 'front/package.json'), 'utf8'))
   const frontendLock = JSON.parse(readFileSync(join(root, 'front/package-lock.json'), 'utf8'))
   if (
-    frontendPackage.name !== state.identity.frontendPackage ||
-    frontendLock.name !== state.identity.frontendPackage ||
-    frontendLock.packages?.['']?.name !== state.identity.frontendPackage
+    frontendPackage.name !== expectedIdentity.frontendPackage ||
+    frontendLock.name !== expectedIdentity.frontendPackage ||
+    frontendLock.packages?.['']?.name !== expectedIdentity.frontendPackage
   ) {
     fail('frontend package.json and package-lock.json names are inconsistent')
   }
 
   const tracked = trackedFiles(root)
-  if (state.status === 'initialized') {
-    for (const path of TEMPLATE_ONLY_FILES) {
-      if (tracked.includes(path) && existsSync(join(root, path))) {
-        fail(`template-only file was not removed: ${path}`)
-      }
+  for (const path of TEMPLATE_ONLY_FILES) {
+    if (existsSync(join(root, path))) {
+      fail(`template-only file was not removed: ${path}`)
     }
   }
-  if (state.examples === 'stripped') {
-    for (const path of EXAMPLE_FILES) {
-      if (existsSync(join(root, path))) {
-        fail(`example file remains after cleanup: ${path}`)
-      }
+  for (const path of EXAMPLE_FILES) {
+    if (existsSync(join(root, path))) {
+      fail(`example file remains after initialization: ${path}`)
     }
-    for (const path of tracked) {
-      const absolutePath = join(root, path)
-      if (!existsSync(absolutePath)) {
-        continue
-      }
-      const buffer = readFileSync(absolutePath)
-      if (isText(buffer) && buffer.toString('utf8').includes(`${EXAMPLE_MARKER}:`)) {
-        fail(`example marker remains after cleanup: ${path}`)
-      }
+  }
+  for (const path of tracked) {
+    const absolutePath = join(root, path)
+    if (!existsSync(absolutePath)) {
+      continue
+    }
+    const buffer = readFileSync(absolutePath)
+    if (!isText(buffer)) {
+      continue
+    }
+    const text = buffer.toString('utf8')
+    if (text.includes(`${TEMPLATE_MARKER}:`) || text.includes(`${EXAMPLE_MARKER}:`)) {
+      fail(`template marker remains after initialization: ${path}`)
     }
   }
 
   command('cargo', ['metadata', '--locked', '--no-deps', '--format-version', '1'], root)
 }
 
-function ignoredArtifactWarnings(root) {
-  const candidates = [
-    ['.app', 'local application data'],
-    ['target', 'Rust build artifacts'],
-    ['front/dist', 'frontend build artifacts'],
-  ]
-  return candidates
-    .filter(([path]) => existsSync(join(root, path)))
-    .map(([path, description]) => `${description} at ${path}/ is ignored and will not be renamed or removed`)
-}
-
-function printSummary(state, target, keepExamples, runCheck, root) {
+function printSummary(sourceIdentity, target, runCheck, root) {
   console.log('\nInitialization summary')
   console.log(`  project slug:       ${target.projectSlug}`)
   console.log(`  Rust package/bin:   ${target.projectSlug}`)
@@ -794,27 +769,14 @@ function printSummary(state, target, keepExamples, runCheck, root) {
   console.log(`  frontend package:   ${target.frontendPackage}`)
   console.log(`  display name:       ${target.displayName}`)
   console.log(`  GitHub repository:  ${target.githubRepository}`)
-  console.log(`  examples:           ${keepExamples ? 'keep' : 'strip'}`)
+  console.log('  examples:           remove')
+  console.log('  template tooling:   remove')
   console.log(`  run just check:     ${runCheck ? 'yes' : 'no'}`)
   if (basename(root) !== target.projectSlug) {
     console.log(`  warning: directory '${basename(root)}' does not match the project slug`)
   }
-  if (detectedGitHubRepository(root, state.identity) !== target.githubRepository) {
+  if (detectedGitHubRepository(root, sourceIdentity) !== target.githubRepository) {
     console.log('  warning: the selected GitHub repository does not match the detected origin')
-  }
-  for (const warning of ignoredArtifactWarnings(root)) {
-    console.log(`  warning: ${warning}`)
-  }
-}
-
-function printStripSummary(runCheck, root) {
-  console.log('\nExample cleanup summary')
-  console.log(`  delete files:       ${EXAMPLE_FILES.length}`)
-  console.log('  remove resources:   items, users')
-  console.log('  database data:      unchanged')
-  console.log(`  run just check:     ${runCheck ? 'yes' : 'no'}`)
-  if (existsSync(join(root, '.app'))) {
-    console.log('  warning: existing local databases are ignored and will not be changed')
   }
 }
 
@@ -877,13 +839,34 @@ function readAnswersFile(path, root) {
   }
 }
 
-async function collectInitAnswers(args, root, state) {
+function validateAnswersObject(answers) {
+  if (!answers || Array.isArray(answers) || typeof answers !== 'object') {
+    fail('non-interactive answers must be a JSON object')
+  }
+  const supported = new Set([
+    'projectSlug',
+    'displayName',
+    'githubRepository',
+    'runCheck',
+    'confirm',
+  ])
+  const unknown = Object.keys(answers).filter((key) => !supported.has(key)).sort()
+  if (unknown.length) {
+    fail(`non-interactive answers contain unsupported field(s): ${unknown.join(', ')}`)
+  }
+  if (answers.runCheck !== undefined && typeof answers.runCheck !== 'boolean') {
+    fail('non-interactive "runCheck" must be a boolean when provided')
+  }
+}
+
+async function collectInitAnswers(args, root, sourceIdentity) {
   const { positional, answersFile } = parseCliArguments(args)
   if (answersFile) {
     if (positional) {
       fail('a positional slug cannot be combined with --answers-file')
     }
     const answers = readAnswersFile(answersFile, root)
+    validateAnswersObject(answers)
     if (answers.confirm !== true) {
       fail('non-interactive answers must contain "confirm": true')
     }
@@ -891,7 +874,6 @@ async function collectInitAnswers(args, root, state) {
       projectSlug: answers.projectSlug,
       displayName: answers.displayName,
       githubRepository: parseGitHubRepository(answers.githubRepository),
-      keepExamples: answers.keepExamples !== false,
       runCheck: answers.runCheck === true,
       confirmed: true,
     }
@@ -907,7 +889,7 @@ async function collectInitAnswers(args, root, state) {
     let slugDefault = positional
     if (!slugDefault) {
       try {
-        validateProjectSlug(directoryDefault, state.identity)
+        validateProjectSlug(directoryDefault, sourceIdentity)
         slugDefault = directoryDefault
       } catch {
         slugDefault = undefined
@@ -915,51 +897,23 @@ async function collectInitAnswers(args, root, state) {
     }
 
     const projectSlug = await askText(interface_, 'Project slug', slugDefault)
-    validateProjectSlug(projectSlug, state.identity)
+    validateProjectSlug(projectSlug, sourceIdentity)
     const displayName = await askText(
       interface_,
       'Display name',
       defaultDisplayName(projectSlug),
     )
-    validateDisplayName(displayName, state.identity)
-    const repositoryDefault = detectedGitHubRepository(root, state.identity)
+    validateDisplayName(displayName, sourceIdentity)
+    const repositoryDefault = detectedGitHubRepository(root, sourceIdentity)
     const githubRepository = parseGitHubRepository(
       await askText(interface_, 'GitHub owner/repository', repositoryDefault),
     )
-    const keepExamples = await askYesNo(interface_, 'Keep items/users example resources?', true)
     const runCheck = await askYesNo(interface_, 'Run just check after initialization?', true)
     const target = deriveIdentity(projectSlug, displayName, githubRepository)
-    validateTargetIdentity(target, state.identity)
-    printSummary(state, target, keepExamples, runCheck, root)
+    validateTargetIdentity(target, sourceIdentity)
+    printSummary(sourceIdentity, target, runCheck, root)
     const confirmed = await askYesNo(interface_, 'Proceed?', false)
-    return { projectSlug, displayName, githubRepository, keepExamples, runCheck, confirmed }
-  } finally {
-    interface_.close()
-  }
-}
-
-async function collectStripAnswers(args, root) {
-  const { positional, answersFile } = parseCliArguments(args)
-  if (positional) {
-    fail('strip-examples does not accept a positional argument')
-  }
-  if (answersFile) {
-    const answers = readAnswersFile(answersFile, root)
-    if (answers.confirm !== true) {
-      fail('non-interactive answers must contain "confirm": true')
-    }
-    return { confirmed: true, runCheck: answers.runCheck === true }
-  }
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    fail('interactive cleanup requires a TTY; automation must use --answers-file')
-  }
-
-  const interface_ = createInterface({ input: process.stdin, output: process.stdout })
-  try {
-    const runCheck = await askYesNo(interface_, 'Run just check after cleanup?', true)
-    printStripSummary(runCheck, root)
-    const confirmed = await askYesNo(interface_, 'Proceed?', false)
-    return { confirmed, runCheck }
+    return { projectSlug, displayName, githubRepository, runCheck, confirmed }
   } finally {
     interface_.close()
   }
@@ -972,14 +926,11 @@ function runCheck(root) {
 
 export async function runInitCli(args, root = PROJECT_ROOT) {
   root = repositoryRoot(root)
-  const state = readState(root)
-  if (state.status === 'initialized') {
-    console.log(`Project '${state.identity.displayName}' is already initialized.`)
-    return
-  }
+  const sourceIdentity = readTemplateIdentity(root)
   requireCleanWorktree(root)
+  requireNoLocalArtifacts(root)
 
-  const answers = await collectInitAnswers(args, root, state)
+  const answers = await collectInitAnswers(args, root, sourceIdentity)
   if (!answers.confirmed) {
     console.log('Initialization cancelled; no files were changed.')
     return
@@ -989,59 +940,24 @@ export async function runInitCli(args, root = PROJECT_ROOT) {
     answers.displayName,
     answers.githubRepository,
   )
-  validateTargetIdentity(target, state.identity)
+  validateTargetIdentity(target, sourceIdentity)
 
   const before = snapshotTrackedTree(root)
-  const after = planInitialization(before, state, target, answers.keepExamples)
-  const expectedState = {
-    schemaVersion: STATE_SCHEMA_VERSION,
-    status: 'initialized',
-    identity: target,
-    examples: answers.keepExamples ? 'present' : 'stripped',
-  }
+  const after = planInitialization(before, sourceIdentity, target)
   const changes = writeTreeTransaction(root, before, after, () =>
-    validateWrittenProject(root, expectedState),
+    validateWrittenProject(root, target),
   )
   console.log(`Initialized '${target.displayName}' across ${changes.length} tracked files.`)
-  console.log('No Git remote, commit, or ignored local data was changed.')
+  console.log('Example resources, migrations, and template tooling were removed.')
+  console.log('No Git remote, commit, history, or local data was changed.')
   if (answers.runCheck) {
     runCheck(root)
   }
   console.log('Docker verification: just docker-build')
 }
 
-export async function runStripExamplesCli(args, root = PROJECT_ROOT) {
-  root = repositoryRoot(root)
-  const state = readState(root)
-  if (state.status !== 'initialized') {
-    fail('initialize the project first and choose example cleanup in the initialization wizard')
-  }
-  if (state.examples === 'stripped') {
-    console.log('Example resources are already stripped; no files were changed.')
-    return
-  }
-  requireCleanWorktree(root)
-
-  const answers = await collectStripAnswers(args, root)
-  if (!answers.confirmed) {
-    console.log('Example cleanup cancelled; no files were changed.')
-    return
-  }
-
-  const before = snapshotTrackedTree(root)
-  const after = planExampleCleanup(before, state)
-  const expectedState = { ...state, examples: 'stripped' }
-  const changes = writeTreeTransaction(root, before, after, () =>
-    validateWrittenProject(root, expectedState),
-  )
-  console.log(`Removed example resources across ${changes.length} tracked files.`)
-  console.log('Existing SQLite and PostgreSQL data was not changed.')
-  if (answers.runCheck) {
-    runCheck(root)
-  }
-}
-
 export const testing = {
+  BLOCKING_LOCAL_PATHS,
   EXAMPLE_FILES,
   PROJECT_ROOT,
   STATE_PATH,

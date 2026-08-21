@@ -1,8 +1,11 @@
 # cyder-template
 
+> [!NOTE]
+> This repository starts as a project template. Create a repository with GitHub's **Use this template** button, clone it, and run `just init` before making project-specific changes. The initializer removes its one-time tooling after it finishes; you may delete this notice once initialization is complete.
+
 Rust + Vue foundation for a small backend-first web application.
 
-The project provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style IDs, health/readiness checks, and a Vue 3 operations UI. IDs are stored internally as `i64` and serialized as strings at JSON boundaries so browser clients do not lose 64-bit integer precision.
+This project provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style IDs, health/readiness checks, and a Vue 3 operations UI. IDs are stored internally as `i64` and serialized as strings at JSON boundaries so browser clients do not lose 64-bit integer precision.
 
 <!-- template-example:start -->
 The included `items` and `users` CRUD resources demonstrate the full backend and frontend path. The `users` resource is sample data only; it is not an authentication, role, team, or tenant system.
@@ -17,7 +20,7 @@ Create a new repository with GitHub's **Use this template** button, clone it, an
 just init
 ```
 
-The wizard validates a lowercase kebab-case project slug, derives the Rust, npm, database, Docker, and display identities, confirms the GitHub security-reporting link, and optionally removes the example resources. It requires a clean Git worktree and never changes the repository directory, remote, history, ignored build artifacts, or local databases.
+The wizard validates a lowercase kebab-case project slug, derives the Rust, npm, database, Docker, and display identities, confirms the GitHub security-reporting link, and removes the included `items/users` examples and their migrations. It requires a clean Git worktree and refuses to run when `.app/`, `target/`, `front/dist/`, or `front/node_modules/` exists; move or remove those local paths first. It never changes the repository directory, remote, history, or local data.
 
 You can prefill the slug while keeping the remaining confirmations interactive:
 
@@ -25,7 +28,7 @@ You can prefill the slug while keeping the remaining confirmations interactive:
 just init my-api
 ```
 
-Automation can call `node scripts/init-project.mjs --answers-file <path>` with a reviewed JSON answer file. The human-facing `just init` command intentionally keeps these details inside the wizard.
+Automation can call `node scripts/init-project.mjs --answers-file <path>` with a reviewed JSON object containing `projectSlug`, `displayName`, `githubRepository`, optional boolean `runCheck`, and `confirm: true`. Unknown fields are rejected. The human-facing `just init` command intentionally keeps these details inside the wizard.
 
 After initialization, prepare and start the project with:
 
@@ -33,6 +36,8 @@ After initialization, prepare and start the project with:
 just bootstrap
 just dev
 ```
+
+Initialization is a one-time conversion. On success it removes its manifest, scripts, commands, tests, lifecycle markers, and example resources, leaving an independent project with empty SQLite/PostgreSQL migration foundations. The short template notice at the top remains intentionally and can be removed manually after initialization.
 <!-- template-init:end -->
 
 ## Requirements
@@ -82,10 +87,6 @@ just test-container-config # configuration and data-layout image contract
 just test-container-http # HTTP and static-asset image contract
 just test-container-shutdown # graceful SIGTERM test for the local image
 ```
-
-<!-- template-example:start -->
-Run `just strip-examples` from a clean, initialized project to remove the optional `items/users` resources without touching existing database data.
-<!-- template-example:end -->
 
 `just audit` requires `cargo-deny` 0.20.2 and registry access. Install the pinned version with:
 
@@ -157,7 +158,7 @@ just check-config
 cargo run -p cyder-template -- config check --format json
 ```
 
-Recognized values are always validated. During normal startup, unknown YAML fields and unsupported `APP_*` names are ignored with a warning that names the key but never its value. This runtime behavior lets an application generated from the template survive temporary configuration skew during its own rolling updates. `config check` rejects every ignored setting and is the deployment/CI gate. YAML-only settings have no corresponding environment-variable name. PostgreSQL summaries report only the backend kind and effective pool settings, so database URLs and passwords are never included.
+Recognized values are always validated. During normal startup, unknown YAML fields and unsupported `APP_*` names are ignored with a warning that names the key but never its value. This behavior lets this project tolerate temporary configuration skew during its own rolling updates. `config check` rejects every ignored setting and is the deployment/CI gate. YAML-only settings have no corresponding environment-variable name. PostgreSQL summaries report only the backend kind and effective pool settings, so database URLs and passwords are never included.
 
 The application binary exposes the non-sensitive resolved listen endpoint for local development tooling:
 
@@ -184,7 +185,7 @@ just dev-backend
 
 The default SQLite pool size is `1` for a conservative local path. File-backed SQLite may set `database_pool_size` greater than `1` in YAML; each pooled connection enables WAL mode, the YAML `sqlite_busy_timeout_ms`, and foreign keys. This helps read concurrency and short write-lock waits, but SQLite still has one writer at a time and should not be treated like PostgreSQL for parallel writes. Plain `:memory:` SQLite requires an effective pool size of `1` so migrations and queries see the same in-memory schema.
 
-Generated IDs retain the 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 worker bits, and 12 sequence bits. This template deliberately supports one application instance and uses one internal worker ID. Do not scale the application horizontally without first replacing the ID and migration ownership strategy.
+Generated IDs retain the 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 worker bits, and 12 sequence bits. This project deliberately supports one application instance and uses one internal worker ID. Do not scale the application horizontally without first replacing the ID and migration ownership strategy.
 
 Use PostgreSQL by setting `APP_DATABASE_URL`:
 
@@ -322,8 +323,8 @@ Compose builds the same `cyder-template:local` image, starts a local PostgreSQL 
 This repository includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
 
 - `Backend`: activates Rust 1.97.1 from `rust-toolchain.toml` with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
-- `Frontend`: reads Node 24.19.0 from `.node-version`, checks the toolchain/bootstrap contracts, runs locked npm install, type checks through `npm test`, and builds the Vite app.
-- `Docker`: initializes a no-examples template product, validates `docker-compose.yml`, builds `cyder-template:ci`, checks its safe configuration/data-layout and HTTP/static-asset contracts, then verifies graceful SIGTERM handling within Docker's default stop deadline.
+- `Frontend`: reads Node 24.19.0 from `.node-version`, checks the applicable tooling contracts, runs locked npm install, type checks through `npm test`, and builds the Vite app.
+- `Docker`: validates `docker-compose.yml`, builds `cyder-template:ci`, checks its safe configuration/data-layout and HTTP/static-asset contracts, then verifies graceful SIGTERM handling within Docker's default stop deadline.
 
 Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Update `.node-version`, `rust-toolchain.toml`, package metadata, and Docker build arguments together; `just test-toolchain` rejects version drift.
 

@@ -41,7 +41,7 @@ onMounted(() => {
     <div class="page-shell">
       <section class="page-header">
         <div>
-          <p class="eyebrow">Rust + Vue template</p>
+          <p class="eyebrow">Rust + Vue application</p>
           <h1>Operator dashboard</h1>
           <p class="page-description">
             Monitor the service health, database connection, and application runtime baseline.

@@ -32,17 +32,32 @@ const SOURCE_IDENTITY = {
   displayName: 'cyder-template',
   githubRepository: 'cyder-hub/cyder-template',
 }
-const INTEGRATION_CARGO_TARGET = join(
+const PRODUCT_CARGO_TARGET = join(
   testing.PROJECT_ROOT,
-  'target/template-project-integration/shared',
+  'target/template-product-check',
 )
+const RETAINED_TEMPLATE_NOTICE =
+  'This repository starts as a project template.'
+const GENERATED_PROJECT_RESIDUALS = [
+  'application generated from the template',
+  'This template deliberately',
+  'This template has not published',
+  'Rust + Vue template',
+  'The template keeps separate schema modules',
+  'the template works without Diesel CLI',
+  'The initializer uses an equivalent path spelling',
+  'file:template?mode=memory&cache=shared',
+  'Project identity or initialization guidance',
+]
 
 function run(commandName, args, options = {}) {
+  const environment = { ...process.env, ...options.env }
+  delete environment.NODE_TEST_CONTEXT
   const result = spawnSync(commandName, args, {
     cwd: options.cwd,
     encoding: 'utf8',
     stdio: options.inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ...options.env },
+    env: environment,
   })
   if (result.error) {
     throw result.error
@@ -56,12 +71,12 @@ function run(commandName, args, options = {}) {
   return result
 }
 
-function repositoryFiles() {
+function repositoryFiles(root = testing.PROJECT_ROOT) {
   return run(
     'git',
     [
       '-C',
-      testing.PROJECT_ROOT,
+      root,
       'ls-files',
       '--cached',
       '--others',
@@ -117,17 +132,9 @@ function initializeFixture(fixture, answers) {
   )
 }
 
-function stripFixture(fixture, answers = {}) {
-  const answersPath = join(fixture.temporaryDirectory, 'strip-answers.json')
-  writeFileSync(
-    answersPath,
-    `${JSON.stringify({ runCheck: false, ...answers, confirm: true }, null, 2)}\n`,
-  )
-  return run(
-    process.execPath,
-    ['scripts/strip-examples.mjs', '--answers-file', answersPath],
-    { cwd: fixture.repository, allowFailure: true },
-  )
+function commandOutput(result) {
+  const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
+  return output || JSON.stringify({ status: result.status, signal: result.signal })
 }
 
 function trackedTextResiduals(repository, tokens) {
@@ -155,13 +162,7 @@ function trackedTextResiduals(repository, tokens) {
 }
 
 function assertInitializedFixture(fixture, expected) {
-  const state = JSON.parse(readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8'))
-  assert.equal(state.status, 'initialized')
-  assert.equal(state.examples, expected.keepExamples ? 'present' : 'stripped')
-  assert.deepEqual(
-    state.identity,
-    deriveIdentity(expected.projectSlug, expected.displayName, expected.githubRepository),
-  )
+  assert.equal(existsSync(join(fixture.repository, testing.STATE_PATH)), false)
   assert.deepEqual(
     trackedTextResiduals(fixture.repository, [
       SOURCE_IDENTITY.projectSlug,
@@ -188,17 +189,43 @@ function assertInitializedFixture(fixture, expected) {
   )
 
   const app = readFileSync(join(fixture.repository, 'server/src/app.rs'), 'utf8')
-  if (expected.keepExamples) {
-    assert.equal(app.includes('template-example:start'), true)
-    assert.equal(existsSync(join(fixture.repository, 'front/src/pages/Items.vue')), true)
-  } else {
-    assert.equal(app.includes('template-example:'), false)
-    assert.equal(app.includes('/api/items'), false)
-    assert.equal(existsSync(join(fixture.repository, 'front/src/pages/Items.vue')), false)
-    assert.equal(
-      existsSync(join(fixture.repository, 'server/migrations/sqlite/.gitkeep')),
-      true,
-    )
+  assert.equal(app.includes('template-example:'), false)
+  assert.equal(app.includes('/api/items'), false)
+  assert.equal(existsSync(join(fixture.repository, 'front/src/pages/Items.vue')), false)
+  assert.equal(
+    existsSync(join(fixture.repository, 'server/migrations/sqlite/.gitkeep')),
+    true,
+  )
+  assert.equal(
+    existsSync(join(fixture.repository, 'server/migrations/postgres/.gitkeep')),
+    true,
+  )
+
+  const justfile = readFileSync(join(fixture.repository, 'justfile'), 'utf8')
+  assert.equal(justfile.includes('\ninit '), false)
+  assert.equal(justfile.includes('test-template-init'), false)
+
+  const readme = readFileSync(join(fixture.repository, 'README.md'), 'utf8')
+  assert.equal(readme.includes(RETAINED_TEMPLATE_NOTICE), true)
+  assert.equal(readme.includes('run `just init`'), true)
+  assert.equal(readme.includes('you may delete this notice'), true)
+  assert.deepEqual(
+    trackedTextResiduals(fixture.repository, GENERATED_PROJECT_RESIDUALS),
+    [],
+  )
+
+  for (const path of repositoryFiles(fixture.repository)) {
+    const absolutePath = join(fixture.repository, path)
+    if (!existsSync(absolutePath)) {
+      continue
+    }
+    const buffer = readFileSync(absolutePath)
+    if (buffer.includes(0)) {
+      continue
+    }
+    const text = buffer.toString('utf8')
+    assert.equal(text.includes('template-init:'), false, path)
+    assert.equal(text.includes('template-example:'), false, path)
   }
 
   const diffCheck = run('git', ['diff', '--check'], {
@@ -217,6 +244,13 @@ test('derives every machine identity from one slug', () => {
     githubRepository: 'acme/my-api',
   })
   assert.equal(defaultDisplayName('my-api'), 'My Api')
+})
+
+test('keeps the source manifest identity-only', () => {
+  assert.deepEqual(
+    JSON.parse(readFileSync(join(testing.PROJECT_ROOT, testing.STATE_PATH), 'utf8')),
+    { identity: SOURCE_IDENTITY },
+  )
 })
 
 test('validates slugs and display names conservatively', () => {
@@ -248,109 +282,57 @@ test('removes complete marker blocks and preserves CRLF', () => {
   )
 })
 
-test('initializes a renamed project while keeping examples', () => {
+test('initializes one clean project and removes all template lifecycle files', () => {
   const fixture = createFixture('sample-service')
   try {
     const answers = {
       projectSlug: 'sample-service',
       displayName: 'Sample Service',
       githubRepository: 'acme/sample-service',
-      keepExamples: true,
       runCheck: false,
     }
     const result = initializeFixture(fixture, answers)
     assert.equal(result.status, 0, result.stderr)
     assertInitializedFixture(fixture, answers)
+
+    if (process.env.DEV_TEMPLATE_PRODUCT_CHECK === '1') {
+      run('just', ['check'], {
+        cwd: fixture.repository,
+        env: { CARGO_TARGET_DIR: PRODUCT_CARGO_TARGET },
+      })
+      run('docker', ['compose', '-f', 'docker-compose.yml', 'config'], {
+        cwd: fixture.repository,
+      })
+    }
 
     const repeat = run(process.execPath, ['scripts/init-project.mjs'], {
       cwd: fixture.repository,
       allowFailure: true,
     })
-    assert.equal(repeat.status, 0, repeat.stderr)
-    assert.match(repeat.stdout, /already initialized/)
-
-    if (process.env.DEV_TEMPLATE_INTEGRATION === '1') {
-      run('just', ['bootstrap'], { cwd: fixture.repository })
-      run('just', ['check'], {
-        cwd: fixture.repository,
-        env: { CARGO_TARGET_DIR: INTEGRATION_CARGO_TARGET },
-      })
-      run('docker', ['compose', '-f', 'docker-compose.yml', 'config'], {
-        cwd: fixture.repository,
-      })
-    }
+    assert.notEqual(repeat.status, 0)
+    assert.match(repeat.stderr, /MODULE_NOT_FOUND/)
   } finally {
     fixture.cleanup()
   }
 })
 
-test('initializes a renamed project and strips examples', () => {
-  const fixture = createFixture('bare-service')
-  const image = `template-init-stripped:${process.pid}`
-  try {
-    const answers = {
-      projectSlug: 'bare-service',
-      displayName: 'Bare Service',
-      githubRepository: 'acme/bare-service',
-      keepExamples: false,
-      runCheck: false,
+test('rejects unsupported non-interactive answer fields', () => {
+  for (const unsupported of ['unexpectedOption', 'futureOption']) {
+    const fixture = createFixture(`unsupported-${unsupported.toLowerCase()}`)
+    try {
+      const result = initializeFixture(fixture, {
+        projectSlug: 'strict-service',
+        displayName: 'Strict Service',
+        githubRepository: 'acme/strict-service',
+        runCheck: false,
+        [unsupported]: true,
+      })
+      assert.notEqual(result.status, 0)
+      assert.match(commandOutput(result), new RegExp(unsupported))
+      assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
+    } finally {
+      fixture.cleanup()
     }
-    const result = initializeFixture(fixture, answers)
-    assert.equal(result.status, 0, result.stderr)
-    assertInitializedFixture(fixture, answers)
-
-    if (process.env.DEV_TEMPLATE_INTEGRATION === '1') {
-      run('just', ['bootstrap'], { cwd: fixture.repository })
-      run('just', ['check'], {
-        cwd: fixture.repository,
-        env: { CARGO_TARGET_DIR: INTEGRATION_CARGO_TARGET },
-      })
-      run('docker', ['compose', '-f', 'docker-compose.yml', 'config'], {
-        cwd: fixture.repository,
-      })
-      run('docker', ['build', '-t', image, '-f', 'Dockerfile', '.'], {
-        cwd: fixture.repository,
-      })
-      run('bash', ['scripts/test-container-shutdown.sh', image], {
-        cwd: fixture.repository,
-      })
-    }
-  } finally {
-    if (process.env.DEV_TEMPLATE_INTEGRATION === '1') {
-      run('docker', ['image', 'rm', '--force', image], { allowFailure: true })
-    }
-    fixture.cleanup()
-  }
-})
-
-test('strips examples later from a clean initialized project', () => {
-  const fixture = createFixture('later-service')
-  try {
-    const initialized = initializeFixture(fixture, {
-      projectSlug: 'later-service',
-      displayName: 'Later Service',
-      githubRepository: 'acme/later-service',
-      keepExamples: true,
-      runCheck: false,
-    })
-    assert.equal(initialized.status, 0, initialized.stderr)
-    run('git', ['add', '--all'], { cwd: fixture.repository })
-    run('git', ['commit', '-m', 'initialize project'], { cwd: fixture.repository })
-
-    const stripped = stripFixture(fixture)
-    assert.equal(stripped.status, 0, stripped.stderr)
-    const state = JSON.parse(readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8'))
-    assert.equal(state.examples, 'stripped')
-    assert.equal(existsSync(join(fixture.repository, 'front/src/pages/Items.vue')), false)
-
-    const repeat = run(process.execPath, ['scripts/strip-examples.mjs'], {
-      cwd: fixture.repository,
-      allowFailure: true,
-    })
-    assert.equal(repeat.status, 0, repeat.stderr)
-    assert.match(repeat.stdout, /already stripped/)
-  } finally {
-    fixture.cleanup()
   }
 })
 
@@ -361,7 +343,6 @@ test('rejects invalid answers without changing the worktree', () => {
       projectSlug: 'Invalid Service',
       displayName: 'Invalid Service',
       githubRepository: 'acme/invalid-service',
-      keepExamples: true,
       runCheck: false,
     })
     assert.notEqual(result.status, 0)
@@ -379,17 +360,34 @@ test('rejects a dirty worktree before reading initialization answers', () => {
       projectSlug: 'dirty-service',
       displayName: 'Dirty Service',
       githubRepository: 'acme/dirty-service',
-      keepExamples: true,
       runCheck: false,
     })
     assert.notEqual(result.status, 0)
-    assert.match(result.stderr, /worktree must be clean/)
-    assert.equal(
-      JSON.parse(readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8')).status,
-      'template',
-    )
+    assert.match(commandOutput(result), /worktree must be clean/)
+    assert.equal(existsSync(join(fixture.repository, testing.STATE_PATH)), true)
   } finally {
     fixture.cleanup()
+  }
+})
+
+test('rejects every local artifact path before initialization', () => {
+  for (const path of testing.BLOCKING_LOCAL_PATHS) {
+    const fixture = createFixture(`artifact-${path.replaceAll('/', '-')}`)
+    try {
+      mkdirSync(join(fixture.repository, path), { recursive: true })
+      const result = initializeFixture(fixture, {
+        projectSlug: 'artifact-service',
+        displayName: 'Artifact Service',
+        githubRepository: 'acme/artifact-service',
+        runCheck: false,
+      })
+      assert.notEqual(result.status, 0)
+      assert.match(commandOutput(result), /clean template checkout/)
+      assert.match(commandOutput(result), new RegExp(path.replaceAll('/', '\\/')))
+      assert.equal(existsSync(join(fixture.repository, testing.STATE_PATH)), true)
+    } finally {
+      fixture.cleanup()
+    }
   }
 })
 
@@ -406,11 +404,10 @@ test('rejects drifted marker structure without partial writes', () => {
       projectSlug: 'drifted-service',
       displayName: 'Drifted Service',
       githubRepository: 'acme/drifted-service',
-      keepExamples: true,
       runCheck: false,
     })
     assert.notEqual(result.status, 0)
-    assert.match(result.stderr, /matching end/)
+    assert.match(commandOutput(result), /matching end/)
     assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
   } finally {
     fixture.cleanup()
@@ -429,15 +426,14 @@ test('rolls back every write when post-write validation fails', () => {
       projectSlug: 'rollback-service',
       displayName: 'Rollback Service',
       githubRepository: 'acme/rollback-service',
-      keepExamples: true,
       runCheck: false,
     })
     assert.notEqual(result.status, 0)
-    assert.match(result.stderr, /all project files were restored/)
+    assert.match(commandOutput(result), /all project files were restored/)
     assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
-    assert.equal(
-      JSON.parse(readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8')).status,
-      'template',
+    assert.deepEqual(
+      JSON.parse(readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8')),
+      { identity: SOURCE_IDENTITY },
     )
   } finally {
     fixture.cleanup()

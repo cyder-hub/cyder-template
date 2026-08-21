@@ -27,7 +27,7 @@ Commands run:
 - [ ] Docker or compose
 - [ ] GitHub Actions or repository metadata
 - [ ] Documentation only
-- [ ] Project identity or initialization guidance
+- [ ] Project identity or naming
 - [ ] Dependencies or lockfiles
 
 ## Checklist

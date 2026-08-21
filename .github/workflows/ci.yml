@@ -40,10 +40,10 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Initialize retained-example project
+      - name: Initialize clean project
         env:
           DEV_TEMPLATE_INIT_ANSWERS: >-
-            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","keepExamples":true,"runCheck":false,"confirm":true}
+            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","runCheck":false,"confirm":true}
         run: |
           answers_file="${RUNNER_TEMP}/template-init-answers.json"
           printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
@@ -105,11 +105,11 @@ jobs:
         working-directory: .
         run: node --test scripts/template-project.test.mjs
 
-      - name: Initialize retained-example project
+      - name: Initialize clean project
         working-directory: .
         env:
           DEV_TEMPLATE_INIT_ANSWERS: >-
-            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","keepExamples":true,"runCheck":false,"confirm":true}
+            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","runCheck":false,"confirm":true}
         run: |
           answers_file="${RUNNER_TEMP}/template-init-answers.json"
           printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
@@ -146,10 +146,10 @@ jobs:
           rustc --version
           cargo --version
 
-      - name: Initialize stripped-example project
+      - name: Initialize clean project
         env:
           DEV_TEMPLATE_INIT_ANSWERS: >-
-            {"projectSlug":"ci-bare-service","displayName":"CI Bare Service","githubRepository":"cyder-hub/ci-bare-service","keepExamples":false,"runCheck":false,"confirm":true}
+            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","runCheck":false,"confirm":true}
         run: |
           answers_file="${RUNNER_TEMP}/template-init-answers.json"
           printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"

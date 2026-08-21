@@ -47,7 +47,6 @@ test('keeps checked-in Node and Rust declarations aligned', () => {
   const workflows = [
     '.github/workflows/ci.yml',
     '.github/workflows/security.yml',
-    '.github/workflows/template-integration.yml',
   ]
     .map((path) => join(PROJECT_ROOT, path))
     .filter(existsSync)

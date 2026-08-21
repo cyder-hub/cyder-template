@@ -61,8 +61,8 @@ Before opening a pull request:
 - Do not add product claims for features the project does not implement, such as authentication, authorization, teams, tenants, or production deployment automation.
 <!-- template-init:start -->
 - Update README and initialization guidance when changing project identity fields, Docker image names, database defaults, or automation commands.
-- Run `just test-template-init` when changing the initializer, example boundaries, or project identity touchpoints.
-- Run the manual `Template Integration` workflow before merging changes that alter initialization or example-cleanup behavior.
+- Run `just test-template-init` when changing the one-time initializer, example-removal boundaries, or project identity touchpoints.
+- Confirm the regular Backend, Frontend, and Docker jobs pass when changing initialization behavior.
 <!-- template-init:end -->
 
 ## Code Style

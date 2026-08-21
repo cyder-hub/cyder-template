@@ -27,8 +27,8 @@ use crate::{
     error::{HttpError, HttpResult},
 };
 
-// The initializer uses an equivalent path spelling after removing example
-// migrations so Diesel's proc macro cannot reuse a stale expansion.
+// Empty migration directories use an equivalent path spelling so Diesel's proc
+// macro cannot reuse a stale expansion after their contents change.
 const SQLITE_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/sqlite");
 const POSTGRES_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/postgres");
 static SQLITE_MEMORY_DATABASE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -565,7 +565,7 @@ mod tests {
             1
         );
         assert_eq!(
-            effective_sqlite_pool_size("file:template?mode=memory&cache=shared", 4),
+            effective_sqlite_pool_size("file:pool-size-test?mode=memory&cache=shared", 4),
             1
         );
         assert_eq!(effective_sqlite_pool_size(".app/dev/db.sqlite", 4), 4);

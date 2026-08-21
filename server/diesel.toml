@@ -1,4 +1,4 @@
-# The template keeps separate schema modules for each supported database.
+# This project keeps separate schema modules for each supported database.
 # Regenerate them from the server directory with:
 #
 #   DATABASE_URL=.app/dev/db/cyder-template.sqlite diesel print-schema > src/schema/sqlite.rs

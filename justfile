@@ -4,13 +4,15 @@ default: list
 list:
 	@just --list
 
+# template-init:start
 # Initialize project identity with an interactive wizard.
 init project="":
 	node "{{justfile_directory()}}/scripts/init-project.mjs" "{{project}}"
 
-# Remove the optional items/users example resources.
-strip-examples:
-	node "{{justfile_directory()}}/scripts/strip-examples.mjs"
+# Test the project initializer in isolated Git worktrees.
+test-template-init:
+	node --test "{{justfile_directory()}}/scripts/template-project.test.mjs"
+# template-init:end
 
 # Check the required toolchain, optional container tooling, and local ports.
 doctor:
@@ -25,12 +27,6 @@ doctor:
 # Prepare a clean checkout for local development.
 bootstrap: doctor
 	node '{{justfile_directory()}}/scripts/bootstrap.mjs'
-
-# template-init:start
-# Test the project initializer in isolated Git worktrees.
-test-template-init:
-	node --test "{{justfile_directory()}}/scripts/template-project.test.mjs"
-# template-init:end
 
 # Test toolchain metadata, environment diagnostics, and bootstrap behavior.
 test-toolchain:
