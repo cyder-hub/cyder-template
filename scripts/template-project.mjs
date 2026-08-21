@@ -32,9 +32,11 @@ const TEMPLATE_MARKER_FILES = new Map([
 const EXAMPLE_MARKER_FILES = new Map([
   ['README.md', 3],
   ['server/src/app.rs', 4],
+  ['server/src/config.rs', 1],
   ['server/src/controller/mod.rs', 1],
   ['server/src/database/mod.rs', 6],
-  ['server/src/error.rs', 3],
+  ['server/src/error.rs', 4],
+  ['server/src/http_middleware.rs', 1],
   ['server/src/main.rs', 1],
   ['server/src/schema/postgres.rs', 1],
   ['server/src/schema/sqlite.rs', 1],

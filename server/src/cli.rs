@@ -7,7 +7,7 @@ pub const HELP: &str = concat!(
     env!("CARGO_PKG_NAME"),
     " config endpoint --format json\n  ",
     env!("CARGO_PKG_NAME"),
-    " config check [--strict] [--format json]\n  ",
+    " config check [--format json]\n  ",
     env!("CARGO_PKG_NAME"),
     " healthcheck\n  ",
     env!("CARGO_PKG_NAME"),
@@ -24,7 +24,7 @@ pub enum OutputFormat {
 pub enum Command {
     Serve,
     ConfigEndpointJson,
-    ConfigCheck { strict: bool, format: OutputFormat },
+    ConfigCheck { format: OutputFormat },
     Healthcheck,
     Help,
 }
@@ -57,20 +57,9 @@ where
         | ["healthcheck", "--help" | "-h"] => Ok(Command::Help),
         ["config", "endpoint", "--format", "json"] => Ok(Command::ConfigEndpointJson),
         ["config", "check"] => Ok(Command::ConfigCheck {
-            strict: false,
-            format: OutputFormat::Text,
-        }),
-        ["config", "check", "--strict"] => Ok(Command::ConfigCheck {
-            strict: true,
             format: OutputFormat::Text,
         }),
         ["config", "check", "--format", "json"] => Ok(Command::ConfigCheck {
-            strict: false,
-            format: OutputFormat::Json,
-        }),
-        ["config", "check", "--strict", "--format", "json"]
-        | ["config", "check", "--format", "json", "--strict"] => Ok(Command::ConfigCheck {
-            strict: true,
             format: OutputFormat::Json,
         }),
         ["healthcheck"] => Ok(Command::Healthcheck),
@@ -124,18 +113,16 @@ mod tests {
     }
 
     #[test]
-    fn config_check_supports_text_json_and_strict_modes() {
+    fn config_check_supports_text_and_json_formats() {
         assert_eq!(
             parse(args(&["config", "check"])).unwrap(),
             Command::ConfigCheck {
-                strict: false,
                 format: OutputFormat::Text
             }
         );
         assert_eq!(
-            parse(args(&["config", "check", "--strict", "--format", "json"])).unwrap(),
+            parse(args(&["config", "check", "--format", "json"])).unwrap(),
             Command::ConfigCheck {
-                strict: true,
                 format: OutputFormat::Json
             }
         );

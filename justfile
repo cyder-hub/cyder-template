@@ -167,11 +167,11 @@ test-postgres:
 	  echo "DEV_POSTGRES_TEST_URL must point to an isolated PostgreSQL test database." >&2
 	  exit 2
 	fi
-	DEV_POSTGRES_TEST_URL="$DEV_POSTGRES_TEST_URL" cargo test -p cyder-template postgres -- --ignored
+	DEV_POSTGRES_TEST_URL="$DEV_POSTGRES_TEST_URL" cargo test -p cyder-template postgres -- --ignored --test-threads=1
 
 # Validate the resolved deployment configuration without side effects.
 check-config:
-	cd '{{justfile_directory()}}' && cargo run --quiet --locked -p cyder-template -- config check --strict
+	cd '{{justfile_directory()}}' && cargo run --quiet --locked -p cyder-template -- config check
 
 # Run frontend checks.
 test-front: front-ci-deps
@@ -227,3 +227,7 @@ test-container-shutdown image="cyder-template:local":
 # Verify the safe configuration and directory contract in an already-built image.
 test-container-config image="cyder-template:local":
 	bash '{{justfile_directory()}}/scripts/test-container-config.sh' "{{image}}"
+
+# Verify HTTP boundaries and static assets in an already-built image.
+test-container-http image="cyder-template:local":
+	bash '{{justfile_directory()}}/scripts/test-container-http.sh' "{{image}}"

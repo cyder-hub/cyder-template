@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::{
     database::{self, DbPool},
-    error::{AppError, AppResult},
+    error::{HttpError, HttpResult},
     id::IdGenerator,
 };
 
@@ -23,7 +23,7 @@ pub async fn create(
     pool: &DbPool,
     id_generator: &IdGenerator,
     input: CreateItemInput,
-) -> AppResult<Item> {
+) -> HttpResult<Item> {
     let now = now_millis()?;
     let item = database::items::NewItem {
         id: id_generator.next_id()?,
@@ -36,36 +36,32 @@ pub async fn create(
 
     database::items::create(pool, item)
         .await
-        .map_err(AppError::from)
+        .map_err(HttpError::from)
 }
 
-pub async fn list(pool: &DbPool) -> AppResult<Vec<Item>> {
-    database::items::list(pool).await.map_err(AppError::from)
+pub async fn list(pool: &DbPool) -> HttpResult<Vec<Item>> {
+    database::items::list(pool).await.map_err(HttpError::from)
 }
 
-pub async fn get(pool: &DbPool, item_id: i64) -> AppResult<Option<Item>> {
+pub async fn get(pool: &DbPool, item_id: i64) -> HttpResult<Option<Item>> {
     database::items::get(pool, item_id)
         .await
-        .map_err(AppError::from)
+        .map_err(HttpError::from)
 }
 
-pub async fn delete(pool: &DbPool, item_id: i64) -> AppResult<bool> {
+pub async fn delete(pool: &DbPool, item_id: i64) -> HttpResult<bool> {
     database::items::delete(pool, item_id)
         .await
-        .map_err(AppError::from)
+        .map_err(HttpError::from)
 }
 
-fn now_millis() -> AppResult<i64> {
+fn now_millis() -> HttpResult<i64> {
     let millis = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|source| AppError::Internal {
-            message: format!("system clock is before unix epoch: {source}"),
-        })?
+        .map_err(|source| HttpError::Clock { source })?
         .as_millis();
 
-    i64::try_from(millis).map_err(|_| AppError::Internal {
-        message: "current timestamp exceeds signed 64-bit range".to_string(),
-    })
+    i64::try_from(millis).map_err(|_| HttpError::TimestampOverflow)
 }
 
 #[cfg(test)]

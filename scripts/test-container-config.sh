@@ -38,10 +38,13 @@ if [[ "$layout" != "10001" ]]; then
   fail "container commands must run as UID 10001; found: $layout"
 fi
 
-default_summary="$(docker run --rm "$image" config check --strict --format json)"
+default_summary="$(docker run --rm "$image" config check --format json)"
 if [[ "$default_summary" != *'"data_dir":"/data"'* \
   || "$default_summary" != *'"database_kind":"sqlite"'* \
-  || "$default_summary" != *'"database_pool_size":1'* ]]; then
+  || "$default_summary" != *'"database_pool_size":1'* \
+  || "$default_summary" != *'"http_request_timeout_ms":30000'* \
+  || "$default_summary" != *'"http_max_concurrent_requests":64'* \
+  || "$default_summary" != *'"http_max_request_body_bytes":1048576'* ]]; then
   fail "default container configuration summary is invalid: $default_summary"
 fi
 if [[ "$default_summary" == *"database_url"* ]]; then
@@ -53,7 +56,7 @@ mkdir -p "$validation_data"
 chmod 0755 "$validation_data"
 readonly_summary="$(docker run --rm \
   --volume "$validation_data:/data:ro" \
-  "$image" config check --strict --format json)"
+  "$image" config check --format json)"
 if [[ "$readonly_summary" != *'"data_dir":"/data"'* ]]; then
   fail "read-only volume configuration check returned an invalid summary: $readonly_summary"
 fi
@@ -64,7 +67,7 @@ fi
 secret="container-postgres-secret-marker"
 postgres_summary="$(docker run --rm \
   --env "APP_DATABASE_URL=postgres://app:${secret}@database/app" \
-  "$image" config check --strict --format json)"
+  "$image" config check --format json)"
 if [[ "$postgres_summary" != *'"database_kind":"postgres"'* \
   || "$postgres_summary" != *'"database_pool_size":5'* ]]; then
   fail "PostgreSQL container configuration summary is invalid: $postgres_summary"
@@ -77,14 +80,20 @@ cat >"$temporary_directory/config.yaml" <<'YAML'
 host: 0.0.0.0
 port: 9010
 database_acquire_timeout_ms: 12000
+http_request_timeout_ms: 45000
+http_max_concurrent_requests: 128
+http_max_request_body_bytes: 2097152
 YAML
 mounted_summary="$(docker run --rm \
   --volume "$temporary_directory/config.yaml:/data/config/config.yaml:ro" \
-  "$image" config check --strict --format json)"
+  "$image" config check --format json)"
 if [[ "$mounted_summary" != *'"config_file":{"kind":"default","path":"/data/config/config.yaml"}'* \
   || "$mounted_summary" != *'"host":"0.0.0.0"'* \
   || "$mounted_summary" != *'"port":9010'* \
-  || "$mounted_summary" != *'"database_acquire_timeout_ms":12000'* ]]; then
+  || "$mounted_summary" != *'"database_acquire_timeout_ms":12000'* \
+  || "$mounted_summary" != *'"http_request_timeout_ms":45000'* \
+  || "$mounted_summary" != *'"http_max_concurrent_requests":128'* \
+  || "$mounted_summary" != *'"http_max_request_body_bytes":2097152'* ]]; then
   fail "mounted default configuration was not resolved: $mounted_summary"
 fi
 
@@ -118,7 +127,7 @@ fi
 missing_stderr="$temporary_directory/missing.stderr"
 if docker run --rm \
   --env APP_CONFIG_PATH=/data/config/missing.yaml \
-  "$image" config check --strict >"$temporary_directory/missing.stdout" 2>"$missing_stderr"; then
+  "$image" config check >"$temporary_directory/missing.stdout" 2>"$missing_stderr"; then
   fail "explicit missing container configuration unexpectedly passed"
 fi
 if ! grep -Fq "does not exist" "$missing_stderr"; then
@@ -128,12 +137,26 @@ fi
 invalid_secret="invalid-url-secret-marker"
 if docker run --rm \
   --env "APP_DATABASE_URL=mysql://${invalid_secret}@database/app" \
-  "$image" config check --strict >"$temporary_directory/invalid.stdout" 2>"$temporary_directory/invalid.stderr"; then
+  "$image" config check >"$temporary_directory/invalid.stdout" 2>"$temporary_directory/invalid.stderr"; then
   fail "unsupported database URL unexpectedly passed"
 fi
 if grep -Fq "$invalid_secret" "$temporary_directory/invalid.stdout" \
   || grep -Fq "$invalid_secret" "$temporary_directory/invalid.stderr"; then
   fail "invalid database diagnostics exposed the original URL"
+fi
+
+unsupported_value="unsupported-environment-value-marker"
+if docker run --rm \
+  --env "APP_UNSUPPORTED_SETTING=${unsupported_value}" \
+  "$image" config check >"$temporary_directory/unsupported.stdout" 2>"$temporary_directory/unsupported.stderr"; then
+  fail "unsupported advanced APP_* environment variable unexpectedly passed config check"
+fi
+if ! grep -Fq "APP_UNSUPPORTED_SETTING" "$temporary_directory/unsupported.stderr"; then
+  fail "unsupported advanced APP_* environment variable was not identified"
+fi
+if grep -Fq "$unsupported_value" "$temporary_directory/unsupported.stdout" \
+  || grep -Fq "$unsupported_value" "$temporary_directory/unsupported.stderr"; then
+  fail "unsupported environment diagnostics exposed the variable value"
 fi
 
 echo "container configuration contract passed"

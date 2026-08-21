@@ -4,6 +4,7 @@ mod config;
 mod controller;
 mod database;
 mod error;
+mod http_middleware;
 mod id;
 mod schema;
 // template-example:start
@@ -39,6 +40,8 @@ struct ConfigEndpoint {
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    http_middleware::install_redacting_panic_hook();
+
     match run().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
@@ -52,7 +55,7 @@ async fn run() -> MainResult<()> {
     match cli::parse(env::args_os().skip(1))? {
         cli::Command::Serve => serve().await?,
         cli::Command::ConfigEndpointJson => print_config_endpoint()?,
-        cli::Command::ConfigCheck { strict, format } => check_config(strict, format)?,
+        cli::Command::ConfigCheck { format } => check_config(format)?,
         cli::Command::Healthcheck => healthcheck()?,
         cli::Command::Help => {
             print!("{}", cli::HELP);
@@ -62,7 +65,7 @@ async fn run() -> MainResult<()> {
 }
 
 fn healthcheck() -> AppResult<()> {
-    let resolved = config::AppConfig::load(false)?;
+    let resolved = config::AppConfig::load(config::ConfigLoadMode::Runtime)?;
     emit_config_warnings(&resolved.warnings);
     let bind_address = resolved.config.bind_address()?;
     let probe_ip = match bind_address.ip() {
@@ -101,7 +104,7 @@ fn healthcheck() -> AppResult<()> {
 }
 
 async fn serve() -> AppResult<()> {
-    let resolved = config::AppConfig::load(false)?;
+    let resolved = config::AppConfig::load(config::ConfigLoadMode::Runtime)?;
     let config = resolved.config;
     init_tracing(&config.log_level)?;
     log_config_warnings(&resolved.warnings);
@@ -124,7 +127,7 @@ async fn serve() -> AppResult<()> {
 }
 
 fn print_config_endpoint() -> AppResult<()> {
-    let resolved = config::AppConfig::load(false)?;
+    let resolved = config::AppConfig::load(config::ConfigLoadMode::Runtime)?;
     emit_config_warnings(&resolved.warnings);
     let config = resolved.config;
     let address = config.bind_address()?;
@@ -139,8 +142,8 @@ fn print_config_endpoint() -> AppResult<()> {
     Ok(())
 }
 
-fn check_config(strict: bool, format: cli::OutputFormat) -> AppResult<()> {
-    let resolved = config::AppConfig::load(strict)?;
+fn check_config(format: cli::OutputFormat) -> AppResult<()> {
+    let resolved = config::AppConfig::load(config::ConfigLoadMode::Check)?;
     emit_config_warnings(&resolved.warnings);
     match format {
         cli::OutputFormat::Text => print!("{}", resolved.summary),
@@ -191,6 +194,9 @@ fn log_config_summary(summary: &config::ConfigSummary) {
         log_level = %summary.log_level,
         shutdown_readiness_delay_ms = summary.shutdown_readiness_delay_ms,
         shutdown_timeout_ms = summary.shutdown_timeout_ms,
+        http_request_timeout_ms = summary.http_request_timeout_ms,
+        http_max_concurrent_requests = summary.http_max_concurrent_requests,
+        http_max_request_body_bytes = summary.http_max_request_body_bytes,
         warnings = summary.warnings.len(),
         "resolved application configuration"
     );
@@ -204,6 +210,7 @@ fn init_tracing(log_level: &str) -> AppResult<()> {
     })?;
 
     tracing_subscriber::fmt()
+        .with_ansi(false)
         .with_env_filter(filter)
         .try_init()
         .map_err(|source| error::AppError::Internal {
