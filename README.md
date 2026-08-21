@@ -1,4 +1,4 @@
-# cyder-template
+# Cyder Music
 
 > [!NOTE]
 > This repository starts as a project template. Create a repository with GitHub's **Use this template** button, clone it, and run `just init` before making project-specific changes. The initializer removes its one-time tooling after it finishes; you may delete this notice once initialization is complete.
@@ -6,39 +6,6 @@
 Rust + Vue foundation for a small backend-first web application.
 
 This project provides an Axum service, Diesel persistence for SQLite and PostgreSQL, application-generated Snowflake-style IDs, health/readiness checks, and a Vue 3 operations UI. IDs are stored internally as `i64` and serialized as strings at JSON boundaries so browser clients do not lose 64-bit integer precision.
-
-<!-- template-example:start -->
-The included `items` and `users` CRUD resources demonstrate the full backend and frontend path. The `users` resource is sample data only; it is not an authentication, role, team, or tenant system.
-<!-- template-example:end -->
-
-<!-- template-init:start -->
-## Use This Template
-
-Create a new repository with GitHub's **Use this template** button, clone it, and run the interactive initializer before making project changes:
-
-```bash
-just init
-```
-
-The wizard validates a lowercase kebab-case project slug, derives the Rust, npm, database, Docker, and display identities, confirms the GitHub security-reporting link, and removes the included `items/users` examples and their migrations. It requires a clean Git worktree and refuses to run when `.app/`, `target/`, `front/dist/`, or `front/node_modules/` exists; move or remove those local paths first. It never changes the repository directory, remote, history, or local data.
-
-You can prefill the slug while keeping the remaining confirmations interactive:
-
-```bash
-just init my-api
-```
-
-Automation can call `node scripts/init-project.mjs --answers-file <path>` with a reviewed JSON object containing `projectSlug`, `displayName`, `githubRepository`, optional boolean `runCheck`, and `confirm: true`. Unknown fields are rejected. The human-facing `just init` command intentionally keeps these details inside the wizard.
-
-After initialization, prepare and start the project with:
-
-```bash
-just bootstrap
-just dev
-```
-
-Initialization is a one-time conversion. On success it removes its manifest, scripts, commands, tests, lifecycle markers, and example resources, leaving an independent project with empty SQLite/PostgreSQL migration foundations. The short template notice at the top remains intentionally and can be removed manually after initialization.
-<!-- template-init:end -->
 
 ## Requirements
 
@@ -59,7 +26,7 @@ just dev
 
 `just bootstrap` checks the required toolchain and local ports, installs the locked frontend dependencies with `npm ci`, and creates `.app/dev/{config,db,storage,logs}`. It does not create or load `.env`; export development overrides in your shell or configure them in your process manager. Docker and its Compose plugin are optional for the default SQLite path, so unavailable container tooling is reported as a warning.
 
-`just dev` asks the Rust configuration loader for the backend's resolved endpoint, starts the backend and Vite dev server in parallel, and injects the corresponding HTTP origin into Vite. The default remains `127.0.0.1:8000`; changing `APP_PORT` or the selected YAML configuration keeps the proxy aligned automatically. When `APP_DATA_DIR` is not set, the backend uses `.app/dev` and creates the SQLite database at `.app/dev/db/cyder-template.sqlite`.
+`just dev` asks the Rust configuration loader for the backend's resolved endpoint, starts the backend and Vite dev server in parallel, and injects the corresponding HTTP origin into Vite. The default remains `127.0.0.1:8000`; changing `APP_PORT` or the selected YAML configuration keeps the proxy aligned automatically. When `APP_DATA_DIR` is not set, the backend uses `.app/dev` and creates the SQLite database at `.app/dev/db/cyder-music.sqlite`.
 
 Open the Vite URL printed by `npm run dev`. The frontend proxies `/api`, `/healthz`, and `/readyz` to the backend.
 
@@ -128,7 +95,7 @@ The complete environment-variable surface is intentionally small:
 | `APP_CONFIG_PATH` | `<data-dir>/config/config.yaml`, optional |
 | `APP_HOST` | `127.0.0.1` from source; `0.0.0.0` in the image |
 | `APP_PORT` | `8000` |
-| `APP_DATABASE_URL` | `<data-dir>/db/cyder-template.sqlite` |
+| `APP_DATABASE_URL` | `<data-dir>/db/cyder-music.sqlite` |
 | `APP_LOG_LEVEL` | `info` |
 
 `host`, `port`, `database_url`, and `log_level` use the same defaults in YAML and may be overridden by their corresponding common environment variables. All operational tuning is YAML-only:
@@ -155,7 +122,7 @@ Validate deployment configuration without connecting to a database, running migr
 
 ```bash
 just check-config
-cargo run -p cyder-template -- config check --format json
+cargo run -p cyder-music -- config check --format json
 ```
 
 Recognized values are always validated. During normal startup, unknown YAML fields and unsupported `APP_*` names are ignored with a warning that names the key but never its value. This behavior lets this project tolerate temporary configuration skew during its own rolling updates. `config check` rejects every ignored setting and is the deployment/CI gate. YAML-only settings have no corresponding environment-variable name. PostgreSQL summaries report only the backend kind and effective pool settings, so database URLs and passwords are never included.
@@ -163,7 +130,7 @@ Recognized values are always validated. During normal startup, unknown YAML fiel
 The application binary exposes the non-sensitive resolved listen endpoint for local development tooling:
 
 ```bash
-cargo run -p cyder-template -- config endpoint --format json
+cargo run -p cyder-music -- config endpoint --format json
 # {"host":"127.0.0.1","port":8000}
 ```
 
@@ -171,7 +138,7 @@ Rust remains the only application configuration parser. `just dev` consumes this
 
 `DEV_PROXY_TARGET` is a development orchestration variable, not an `APP_*` backend setting. Production does not use this proxy contract: the Rust process loads its configuration directly and serves the built frontend on the same origin.
 
-The frontend location is not configurable. Source and release runs use `front/dist`; the image stores the same immutable artifact at `/app/front/dist`. Persisted state belongs under the one data root: `config/`, `db/`, `storage/`, and the reserved `logs/` directory. The service currently logs to stdout/stderr, while temporary files belong under `/tmp/cyder-template`.
+The frontend location is not configurable. Source and release runs use `front/dist`; the image stores the same immutable artifact at `/app/front/dist`. Persisted state belongs under the one data root: `config/`, `db/`, `storage/`, and the reserved `logs/` directory. The service currently logs to stdout/stderr, while temporary files belong under `/tmp/cyder-music`.
 
 ## Databases
 
@@ -190,7 +157,7 @@ Generated IDs retain the 43/8/12 Snowflake-style layout: 43 timestamp bits, 8 wo
 Use PostgreSQL by setting `APP_DATABASE_URL`:
 
 ```bash
-APP_DATABASE_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template just dev-backend
+APP_DATABASE_URL=postgres://cyder_music:cyder_music_dev@127.0.0.1:5432/cyder_music just dev-backend
 ```
 
 The service detects the backend from the URL, defaults PostgreSQL to a pool of `5`, and runs the matching embedded Diesel migrations at startup. The YAML `database_acquire_timeout_ms` controls how long a request waits for a pooled connection before failing readiness or database operations.
@@ -198,12 +165,12 @@ The service detects the backend from the URL, defaults PostgreSQL to a pool of `
 PostgreSQL integration tests are opt-in because they need a disposable database. Point `DEV_POSTGRES_TEST_URL` at an isolated test database, then run:
 
 ```bash
-DEV_POSTGRES_TEST_URL=postgres://cyder_template:cyder_template_dev@127.0.0.1:5432/cyder_template_test just test-postgres
+DEV_POSTGRES_TEST_URL=postgres://cyder_music:cyder_music_dev@127.0.0.1:5432/cyder_music_test just test-postgres
 ```
 
 The PostgreSQL test uses a pool size greater than one and covers migrations and readiness. Without `DEV_POSTGRES_TEST_URL`, the ignored PostgreSQL test is not part of the default `cargo test --workspace` path.
 
-The compose setup creates `cyder_template_test` only when PostgreSQL initializes a fresh volume. If you already have a local compose volume, create a separate test database manually or recreate the local volume before running the PostgreSQL integration test.
+The compose setup creates `cyder_music_test` only when PostgreSQL initializes a fresh volume. If you already have a local compose volume, create a separate test database manually or recreate the local volume before running the PostgreSQL integration test.
 
 Schema files are split by backend:
 
@@ -218,28 +185,6 @@ Health endpoints:
 
 - `GET /healthz` checks that the process is alive.
 - `GET /readyz` checks that the service accepts traffic and that its database is connected.
-
-<!-- template-example:start -->
-Example resources:
-
-- `GET /api/items`
-- `POST /api/items`
-- `GET /api/items/{id}`
-- `DELETE /api/items/{id}`
-- `GET /api/users`
-- `POST /api/users`
-- `GET /api/users/{id}`
-- `DELETE /api/users/{id}`
-
-ID boundary convention:
-
-- Database and service structs keep generated IDs as `i64`.
-- Controller response DTOs use `controller::api_id::ApiId` for `id` fields so JSON serializes IDs as strings.
-- Controller path extractors can use `Path<ApiId>`, then call `into_i64()` before passing IDs to service/database functions.
-- Frontend resource types use `string` for IDs and pass those strings back in URLs.
-
-This keeps database indexes and backend arithmetic efficient while avoiding JavaScript 64-bit integer precision loss in browser clients.
-<!-- template-example:end -->
 
 ## HTTP Boundary
 
@@ -297,13 +242,13 @@ just docker-build
 The equivalent direct Docker command is:
 
 ```bash
-docker build -t cyder-template:local -f Dockerfile .
+docker build -t cyder-music:local -f Dockerfile .
 ```
 
 Run the image with its default SQLite database:
 
 ```bash
-docker run --rm -p 8000:8000 -v "$PWD/.app/docker:/data" cyder-template:local
+docker run --rm -p 8000:8000 -v "$PWD/.app/docker:/data" cyder-music:local
 ```
 
 The image keeps versioned, immutable artifacts under `/app` and runs commands as the non-root UID/GID `10001`. When starting a runtime command, its entrypoint creates missing `config`, `db`, `storage`, and `logs` directories under `/data` without recursively changing an existing volume's ownership. Configuration and help commands skip this preparation, so validation also works against an empty read-only `/data` mount without changing it. Mounting `/data` is the simplest way to preserve every application-owned resource; advanced deployments may mount individual subdirectories. Ensure mounted paths are writable by UID/GID `10001` when starting the service.
@@ -316,7 +261,7 @@ Run PostgreSQL and the app together with compose:
 docker compose up --build
 ```
 
-Compose builds the same `cyder-template:local` image, starts a local PostgreSQL service with a healthcheck, points `APP_DATABASE_URL` at that service, and mounts the application `/data` root. Its fixed credentials and exposed PostgreSQL port are development conveniences, not production defaults. PostgreSQL automatically receives the pool default of `5`.
+Compose builds the same `cyder-music:local` image, starts a local PostgreSQL service with a healthcheck, points `APP_DATABASE_URL` at that service, and mounts the application `/data` root. Its fixed credentials and exposed PostgreSQL port are development conveniences, not production defaults. PostgreSQL automatically receives the pool default of `5`.
 
 ## Automation
 
@@ -324,7 +269,7 @@ This repository includes `.github/workflows/ci.yml`. The workflow runs on pull r
 
 - `Backend`: activates Rust 1.97.1 from `rust-toolchain.toml` with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
 - `Frontend`: reads Node 24.19.0 from `.node-version`, checks the applicable tooling contracts, runs locked npm install, type checks through `npm test`, and builds the Vite app.
-- `Docker`: validates `docker-compose.yml`, builds `cyder-template:ci`, checks its safe configuration/data-layout and HTTP/static-asset contracts, then verifies graceful SIGTERM handling within Docker's default stop deadline.
+- `Docker`: validates `docker-compose.yml`, builds `cyder-music:ci`, checks its safe configuration/data-layout and HTTP/static-asset contracts, then verifies graceful SIGTERM handling within Docker's default stop deadline.
 
 Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Update `.node-version`, `rust-toolchain.toml`, package metadata, and Docker build arguments together; `just test-toolchain` rejects version drift.
 

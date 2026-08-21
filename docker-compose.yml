@@ -2,14 +2,14 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: cyder_template
-      POSTGRES_USER: cyder_template
-      POSTGRES_PASSWORD: cyder_template_dev
+      POSTGRES_DB: cyder_music
+      POSTGRES_USER: cyder_music
+      POSTGRES_PASSWORD: cyder_music_dev
     ports:
       - "5432:5432"
     volumes:
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
-      - cyder-template-postgres-data:/var/lib/postgresql/data
+      - cyder-music-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
@@ -24,17 +24,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: cyder-template:local
+    image: cyder-music:local
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      APP_DATABASE_URL: postgres://cyder_template:cyder_template_dev@postgres:5432/cyder_template
+      APP_DATABASE_URL: postgres://cyder_music:cyder_music_dev@postgres:5432/cyder_music
     ports:
       - "8000:8000"
     volumes:
-      - cyder-template-data:/data
+      - cyder-music-data:/data
 
 volumes:
-  cyder-template-data:
-  cyder-template-postgres-data:
+  cyder-music-data:
+  cyder-music-postgres-data:

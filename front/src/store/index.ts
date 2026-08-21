@@ -15,7 +15,7 @@ export interface ReadyResponse extends HealthResponse {
 
 export const useAppStore = defineStore('app', {
   state: () => ({
-    serviceName: 'cyder-template',
+    serviceName: 'cyder-music',
     health: null as HealthResponse | null,
     readiness: null as ReadyResponse | null,
     loading: false,

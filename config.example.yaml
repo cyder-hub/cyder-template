@@ -7,9 +7,9 @@
 # port: 8000
 
 # With no explicit URL, SQLite uses:
-#   ${APP_DATA_DIR}/db/cyder-template.sqlite
+#   ${APP_DATA_DIR}/db/cyder-music.sqlite
 # PostgreSQL URLs may use postgres:// or postgresql://.
-# database_url: .app/dev/db/cyder-template.sqlite
+# database_url: .app/dev/db/cyder-music.sqlite
 
 # When omitted, SQLite uses 1 connection and PostgreSQL uses 5.
 # database_pool_size: 1
