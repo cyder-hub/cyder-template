@@ -19,48 +19,22 @@ const DEFAULT_SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 const DEFAULT_LOG_LEVEL: &str = "info";
 const DEFAULT_SHUTDOWN_READINESS_DELAY_MS: u64 = 1_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS: u64 = 8_000;
+const DEFAULT_HTTP_REQUEST_TIMEOUT_MS: u64 = 30_000;
+const MIN_HTTP_REQUEST_TIMEOUT_MS: u64 = 1;
+const MAX_HTTP_REQUEST_TIMEOUT_MS: u64 = 300_000;
+const DEFAULT_HTTP_MAX_CONCURRENT_REQUESTS: u32 = 64;
+const MIN_HTTP_MAX_CONCURRENT_REQUESTS: u32 = 1;
+const MAX_HTTP_MAX_CONCURRENT_REQUESTS: u32 = 4_096;
+const DEFAULT_HTTP_MAX_REQUEST_BODY_BYTES: u64 = 1_048_576;
+const MIN_HTTP_MAX_REQUEST_BODY_BYTES: u64 = 1;
+const MAX_HTTP_MAX_REQUEST_BODY_BYTES: u64 = 67_108_864;
 const DEFAULT_CONFIG_RELATIVE_PATH: &str = "config/config.yaml";
 const DEFAULT_DATABASE_RELATIVE_PATH: &str = "db/cyder-template.sqlite";
 
-const RUNTIME_ENVIRONMENT_KEYS: &[&str] = &[
-    "APP_HOST",
-    "APP_PORT",
-    "APP_DATABASE_URL",
-    "APP_DATABASE_POOL_SIZE",
-    "APP_DATABASE_ACQUIRE_TIMEOUT_MS",
-    "APP_SQLITE_BUSY_TIMEOUT_MS",
-    "APP_LOG_LEVEL",
-    "APP_SHUTDOWN_READINESS_DELAY_MS",
-    "APP_SHUTDOWN_TIMEOUT_MS",
-];
+const RUNTIME_ENVIRONMENT_KEYS: &[&str] =
+    &["APP_HOST", "APP_PORT", "APP_DATABASE_URL", "APP_LOG_LEVEL"];
 
 const BOOTSTRAP_ENVIRONMENT_KEYS: &[&str] = &["APP_DATA_DIR", "APP_CONFIG_PATH"];
-
-const DEPRECATED_ENVIRONMENT_KEYS: &[(&str, &str)] = &[
-    (
-        "APP_ID_WORKER_ID",
-        "worker IDs were removed because the template supports one application instance",
-    ),
-    (
-        "APP_PUBLIC_DIR",
-        "the frontend artifact location is fixed at front/dist",
-    ),
-    (
-        "APP_TEST_POSTGRES_URL",
-        "use DEV_POSTGRES_TEST_URL for the opt-in integration test",
-    ),
-];
-
-const DEPRECATED_FILE_KEYS: &[(&str, &str)] = &[
-    (
-        "id_worker_id",
-        "worker IDs were removed because the template supports one application instance",
-    ),
-    (
-        "public_dir",
-        "the frontend artifact location is fixed at front/dist",
-    ),
-];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -91,10 +65,12 @@ impl DatabaseUrl {
         Self(":memory:".to_string())
     }
 
+    // template-example:start
     #[cfg(test)]
     pub fn sqlite_path(path: impl Into<String>) -> Self {
         Self(path.into())
     }
+    // template-example:end
 
     fn parse(value: String) -> Result<(Self, DatabaseKind), ConfigValidationError> {
         validate_non_empty_string("database_url", &value)?;
@@ -144,6 +120,9 @@ pub struct AppConfig {
     pub log_level: String,
     pub shutdown_readiness_delay_ms: u64,
     pub shutdown_timeout_ms: u64,
+    pub http_request_timeout_ms: u64,
+    pub http_max_concurrent_requests: u32,
+    pub http_max_request_body_bytes: u64,
 }
 
 impl Default for AppConfig {
@@ -166,8 +145,17 @@ impl Default for AppConfig {
             log_level: DEFAULT_LOG_LEVEL.to_string(),
             shutdown_readiness_delay_ms: DEFAULT_SHUTDOWN_READINESS_DELAY_MS,
             shutdown_timeout_ms: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+            http_request_timeout_ms: DEFAULT_HTTP_REQUEST_TIMEOUT_MS,
+            http_max_concurrent_requests: DEFAULT_HTTP_MAX_CONCURRENT_REQUESTS,
+            http_max_request_body_bytes: DEFAULT_HTTP_MAX_REQUEST_BODY_BYTES,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigLoadMode {
+    Runtime,
+    Check,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -211,6 +199,9 @@ pub struct ConfigSummary {
     pub log_level: String,
     pub shutdown_readiness_delay_ms: u64,
     pub shutdown_timeout_ms: u64,
+    pub http_request_timeout_ms: u64,
+    pub http_max_concurrent_requests: u32,
+    pub http_max_request_body_bytes: u64,
     pub warnings: Vec<ConfigWarning>,
 }
 
@@ -240,6 +231,21 @@ impl fmt::Display for ConfigSummary {
             formatter,
             "shutdown_timeout_ms: {}",
             self.shutdown_timeout_ms
+        )?;
+        writeln!(
+            formatter,
+            "http_request_timeout_ms: {}",
+            self.http_request_timeout_ms
+        )?;
+        writeln!(
+            formatter,
+            "http_max_concurrent_requests: {}",
+            self.http_max_concurrent_requests
+        )?;
+        writeln!(
+            formatter,
+            "http_max_request_body_bytes: {}",
+            self.http_max_request_body_bytes
         )?;
         writeln!(formatter, "warnings: {}", self.warnings.len())
     }
@@ -278,8 +284,8 @@ pub enum ConfigError {
         #[from]
         source: ConfigValidationError,
     },
-    #[error("strict configuration check rejected: {issues}")]
-    Strict { issues: String },
+    #[error("configuration check rejected: {issues}")]
+    CheckRejected { issues: String },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -315,6 +321,12 @@ pub enum ConfigValidationError {
     InvalidLogFilter,
     #[error("data directory path exists but is not a directory")]
     InvalidDataDirectory,
+    #[error("http_request_timeout_ms must be between 1 and 300000")]
+    InvalidHttpRequestTimeout,
+    #[error("http_max_concurrent_requests must be between 1 and 4096")]
+    InvalidHttpMaxConcurrentRequests,
+    #[error("http_max_request_body_bytes must be between 1 and 67108864")]
+    InvalidHttpMaxRequestBodyBytes,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -329,19 +341,22 @@ struct PartialAppConfig {
     log_level: Option<String>,
     shutdown_readiness_delay_ms: Option<u64>,
     shutdown_timeout_ms: Option<u64>,
+    http_request_timeout_ms: Option<u64>,
+    http_max_concurrent_requests: Option<u32>,
+    http_max_request_body_bytes: Option<u64>,
     #[serde(flatten)]
     extra: BTreeMap<String, serde_json::Value>,
 }
 
 impl AppConfig {
-    pub fn load(strict: bool) -> Result<ResolvedConfig, ConfigError> {
+    pub fn load(mode: ConfigLoadMode) -> Result<ResolvedConfig, ConfigError> {
         let environment = collect_app_environment()?;
-        Self::load_from_environment(environment, strict)
+        Self::load_from_environment(environment, mode)
     }
 
     fn load_from_environment(
         environment: HashMap<String, String>,
-        strict: bool,
+        mode: ConfigLoadMode,
     ) -> Result<ResolvedConfig, ConfigError> {
         let data_dir = resolve_data_dir(&environment)?;
         let (config_file, config_path) = resolve_config_file(&environment, &data_dir)?;
@@ -368,14 +383,13 @@ impl AppConfig {
         warnings.extend(file_warnings(&partial.extra, &config_file));
         let config = resolve_values(partial, data_dir, &mut warnings)?;
 
-        if strict {
+        if mode == ConfigLoadMode::Check {
             let blocking = warnings
                 .iter()
-                .filter(|warning| matches!(warning.code.as_str(), "unknown_key" | "removed_key"))
                 .map(|warning| format!("{} ({})", warning.key, warning.message))
                 .collect::<Vec<_>>();
             if !blocking.is_empty() {
-                return Err(ConfigError::Strict {
+                return Err(ConfigError::CheckRejected {
                     issues: blocking.join(", "),
                 });
             }
@@ -395,6 +409,9 @@ impl AppConfig {
             log_level: config.log_level.clone(),
             shutdown_readiness_delay_ms: config.shutdown_readiness_delay_ms,
             shutdown_timeout_ms: config.shutdown_timeout_ms,
+            http_request_timeout_ms: config.http_request_timeout_ms,
+            http_max_concurrent_requests: config.http_max_concurrent_requests,
+            http_max_request_body_bytes: config.http_max_request_body_bytes,
             warnings: warnings.clone(),
         };
 
@@ -504,17 +521,7 @@ fn environment_warnings(environment: &HashMap<String, String>) -> Vec<ConfigWarn
     keys.sort();
 
     for key in keys {
-        if let Some((_, reason)) = DEPRECATED_ENVIRONMENT_KEYS
-            .iter()
-            .find(|(deprecated, _)| deprecated == &key.as_str())
-        {
-            warnings.push(ConfigWarning {
-                code: "removed_key".to_string(),
-                source: "environment".to_string(),
-                key: key.clone(),
-                message: (*reason).to_string(),
-            });
-        } else if !RUNTIME_ENVIRONMENT_KEYS.contains(&key.as_str())
+        if !RUNTIME_ENVIRONMENT_KEYS.contains(&key.as_str())
             && !BOOTSTRAP_ENVIRONMENT_KEYS.contains(&key.as_str())
         {
             warnings.push(ConfigWarning {
@@ -541,25 +548,11 @@ fn file_warnings(
 
     extra
         .keys()
-        .map(|key| {
-            if let Some((_, reason)) = DEPRECATED_FILE_KEYS
-                .iter()
-                .find(|(deprecated, _)| deprecated == &key.as_str())
-            {
-                ConfigWarning {
-                    code: "removed_key".to_string(),
-                    source: source.clone(),
-                    key: key.clone(),
-                    message: (*reason).to_string(),
-                }
-            } else {
-                ConfigWarning {
-                    code: "unknown_key".to_string(),
-                    source: source.clone(),
-                    key: key.clone(),
-                    message: "unknown YAML field is ignored".to_string(),
-                }
-            }
+        .map(|key| ConfigWarning {
+            code: "unknown_key".to_string(),
+            source: source.clone(),
+            key: key.clone(),
+            message: "unknown YAML field is ignored".to_string(),
         })
         .collect()
 }
@@ -630,6 +623,15 @@ fn resolve_values(
     let shutdown_timeout_ms = partial
         .shutdown_timeout_ms
         .unwrap_or(DEFAULT_SHUTDOWN_TIMEOUT_MS);
+    let http_request_timeout_ms = partial
+        .http_request_timeout_ms
+        .unwrap_or(DEFAULT_HTTP_REQUEST_TIMEOUT_MS);
+    let http_max_concurrent_requests = partial
+        .http_max_concurrent_requests
+        .unwrap_or(DEFAULT_HTTP_MAX_CONCURRENT_REQUESTS);
+    let http_max_request_body_bytes = partial
+        .http_max_request_body_bytes
+        .unwrap_or(DEFAULT_HTTP_MAX_REQUEST_BODY_BYTES);
 
     let config = AppConfig {
         data_dir,
@@ -643,6 +645,9 @@ fn resolve_values(
         log_level,
         shutdown_readiness_delay_ms,
         shutdown_timeout_ms,
+        http_request_timeout_ms,
+        http_max_concurrent_requests,
+        http_max_request_body_bytes,
     };
     validate_resolved_config(&config)?;
     Ok(config)
@@ -663,6 +668,21 @@ fn validate_resolved_config(config: &AppConfig) -> Result<(), ConfigValidationEr
             shutdown_readiness_delay_ms: config.shutdown_readiness_delay_ms,
             shutdown_timeout_ms: config.shutdown_timeout_ms,
         });
+    }
+    if !(MIN_HTTP_REQUEST_TIMEOUT_MS..=MAX_HTTP_REQUEST_TIMEOUT_MS)
+        .contains(&config.http_request_timeout_ms)
+    {
+        return Err(ConfigValidationError::InvalidHttpRequestTimeout);
+    }
+    if !(MIN_HTTP_MAX_CONCURRENT_REQUESTS..=MAX_HTTP_MAX_CONCURRENT_REQUESTS)
+        .contains(&config.http_max_concurrent_requests)
+    {
+        return Err(ConfigValidationError::InvalidHttpMaxConcurrentRequests);
+    }
+    if !(MIN_HTTP_MAX_REQUEST_BODY_BYTES..=MAX_HTTP_MAX_REQUEST_BODY_BYTES)
+        .contains(&config.http_max_request_body_bytes)
+    {
+        return Err(ConfigValidationError::InvalidHttpMaxRequestBodyBytes);
     }
     Ok(())
 }
@@ -698,10 +718,21 @@ mod tests {
             .collect()
     }
 
+    fn file_environment(contents: &str) -> (tempfile::TempDir, HashMap<String, String>) {
+        let temporary_directory = tempdir().expect("temporary directory should be created");
+        let config_path = temporary_directory.path().join("config.yaml");
+        fs::write(&config_path, contents).expect("configuration should be written");
+        let environment = environment(&[(
+            "APP_CONFIG_PATH",
+            config_path.to_str().expect("UTF-8 configuration path"),
+        )]);
+        (temporary_directory, environment)
+    }
+
     #[test]
     fn zero_configuration_uses_local_sqlite_defaults() {
         assert_eq!(AppConfig::default().data_dir, PathBuf::from(".app/dev"));
-        let resolved = AppConfig::load_from_environment(HashMap::new(), false)
+        let resolved = AppConfig::load_from_environment(HashMap::new(), ConfigLoadMode::Runtime)
             .expect("defaults should resolve");
 
         assert_eq!(resolved.config.data_dir, PathBuf::from(".app/dev"));
@@ -709,6 +740,9 @@ mod tests {
         assert_eq!(resolved.config.port, 8000);
         assert_eq!(resolved.config.database_kind, DatabaseKind::Sqlite);
         assert_eq!(resolved.config.database_pool_size, 1);
+        assert_eq!(resolved.config.http_request_timeout_ms, 30_000);
+        assert_eq!(resolved.config.http_max_concurrent_requests, 64);
+        assert_eq!(resolved.config.http_max_request_body_bytes, 1_048_576);
         assert_eq!(
             resolved.config.database_url.as_str(),
             ".app/dev/db/cyder-template.sqlite"
@@ -734,7 +768,7 @@ mod tests {
                 ("APP_HOST", "0.0.0.0"),
                 ("APP_DATABASE_URL", "postgres://app:secret@localhost/app"),
             ]),
-            false,
+            ConfigLoadMode::Runtime,
         )
         .expect("configuration should resolve");
 
@@ -750,14 +784,10 @@ mod tests {
 
     #[test]
     fn explicit_pool_size_overrides_backend_default() {
-        let resolved = AppConfig::load_from_environment(
-            environment(&[
-                ("APP_DATABASE_URL", "postgres://localhost/app"),
-                ("APP_DATABASE_POOL_SIZE", "9"),
-            ]),
-            false,
-        )
-        .expect("configuration should resolve");
+        let (_temporary_directory, values) =
+            file_environment("database_url: postgres://localhost/app\ndatabase_pool_size: 9\n");
+        let resolved = AppConfig::load_from_environment(values, ConfigLoadMode::Runtime)
+            .expect("configuration should resolve");
 
         assert_eq!(resolved.config.database_pool_size, 9);
     }
@@ -766,7 +796,7 @@ mod tests {
     fn explicit_missing_config_file_fails() {
         let error = AppConfig::load_from_environment(
             environment(&[("APP_CONFIG_PATH", "/definitely/missing/config.yaml")]),
-            false,
+            ConfigLoadMode::Runtime,
         )
         .expect_err("missing explicit config should fail");
 
@@ -784,7 +814,7 @@ mod tests {
                 "APP_DATA_DIR",
                 temporary_directory.path().to_str().expect("UTF-8 path"),
             )]),
-            false,
+            ConfigLoadMode::Runtime,
         )
         .expect_err("default config inspection errors should fail");
 
@@ -792,28 +822,36 @@ mod tests {
     }
 
     #[test]
-    fn unknown_and_removed_keys_warn_normally_and_fail_strictly() {
-        let values = environment(&[("APP_DATABASE_URl", "ignored"), ("APP_ID_WORKER_ID", "3")]);
-        let resolved = AppConfig::load_from_environment(values.clone(), false)
+    fn unknown_environment_keys_warn_at_runtime_and_fail_checks() {
+        let values = environment(&[
+            ("APP_DATABASE_URl", "ignored"),
+            ("APP_UNSUPPORTED_SETTING", "ignored"),
+        ]);
+        let resolved = AppConfig::load_from_environment(values.clone(), ConfigLoadMode::Runtime)
             .expect("compatible loading should succeed");
         assert_eq!(resolved.warnings.len(), 2);
+        assert_eq!(resolved.config.database_pool_size, 1);
 
-        let error = AppConfig::load_from_environment(values, true)
-            .expect_err("strict loading should reject warnings");
+        let error = AppConfig::load_from_environment(values, ConfigLoadMode::Check)
+            .expect_err("configuration checks should reject warnings");
         assert!(error.to_string().contains("APP_DATABASE_URl"));
-        assert!(error.to_string().contains("APP_ID_WORKER_ID"));
+        assert!(error.to_string().contains("APP_UNSUPPORTED_SETTING"));
     }
 
     #[test]
     fn invalid_log_filter_and_empty_database_url_fail() {
-        let log_error =
-            AppConfig::load_from_environment(environment(&[("APP_LOG_LEVEL", "[")]), false)
-                .expect_err("invalid log filter should fail");
+        let log_error = AppConfig::load_from_environment(
+            environment(&[("APP_LOG_LEVEL", "[")]),
+            ConfigLoadMode::Runtime,
+        )
+        .expect_err("invalid log filter should fail");
         assert!(log_error.to_string().contains("log_level"));
 
-        let database_error =
-            AppConfig::load_from_environment(environment(&[("APP_DATABASE_URL", "")]), false)
-                .expect_err("empty database URL should fail");
+        let database_error = AppConfig::load_from_environment(
+            environment(&[("APP_DATABASE_URL", "")]),
+            ConfigLoadMode::Runtime,
+        )
+        .expect_err("empty database URL should fail");
         assert!(database_error.to_string().contains("database_url"));
     }
 
@@ -825,7 +863,7 @@ mod tests {
                 "APP_DATABASE_URL",
                 &format!("postgres://app:{secret}@localhost/app"),
             )]),
-            false,
+            ConfigLoadMode::Runtime,
         )
         .expect("configuration should resolve");
 
@@ -836,19 +874,20 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_only_setting_warns_for_postgres_without_blocking_strict_mode() {
-        let resolved = AppConfig::load_from_environment(
-            environment(&[
-                ("APP_DATABASE_URL", "postgres://localhost/app"),
-                ("APP_SQLITE_BUSY_TIMEOUT_MS", "100"),
-            ]),
-            true,
-        )
-        .expect("inactive setting should only warn");
+    fn inactive_settings_warn_at_runtime_and_fail_checks() {
+        let (_temporary_directory, values) = file_environment(
+            "database_url: postgres://localhost/app\nsqlite_busy_timeout_ms: 100\n",
+        );
+        let resolved = AppConfig::load_from_environment(values.clone(), ConfigLoadMode::Runtime)
+            .expect("inactive setting should only warn at runtime");
 
         assert_eq!(resolved.warnings.len(), 1);
         assert_eq!(resolved.warnings[0].code, "inactive_setting");
         assert!(resolved.summary.sqlite_busy_timeout_ms.is_none());
+
+        let error = AppConfig::load_from_environment(values, ConfigLoadMode::Check)
+            .expect_err("configuration checks should reject inactive settings");
+        assert!(error.to_string().contains("sqlite_busy_timeout_ms"));
     }
 
     #[test]
@@ -866,7 +905,53 @@ mod tests {
     }
 
     #[test]
-    fn yaml_unknown_and_removed_keys_follow_compatibility_mode() {
+    fn http_limits_are_loaded_from_yaml_and_reported_safely() {
+        let (_temporary_directory, values) = file_environment(
+            "http_request_timeout_ms: 45000\nhttp_max_concurrent_requests: 128\nhttp_max_request_body_bytes: 2097152\n",
+        );
+        let resolved = AppConfig::load_from_environment(values, ConfigLoadMode::Check)
+            .expect("HTTP limits should resolve from YAML");
+
+        assert_eq!(resolved.config.http_request_timeout_ms, 45_000);
+        assert_eq!(resolved.config.http_max_concurrent_requests, 128);
+        assert_eq!(resolved.config.http_max_request_body_bytes, 2_097_152);
+        assert_eq!(resolved.summary.http_request_timeout_ms, 45_000);
+        assert_eq!(resolved.summary.http_max_concurrent_requests, 128);
+        assert_eq!(resolved.summary.http_max_request_body_bytes, 2_097_152);
+    }
+
+    #[test]
+    fn http_limit_ranges_are_validated() {
+        let invalid_timeout = AppConfig {
+            http_request_timeout_ms: 300_001,
+            ..AppConfig::default()
+        };
+        assert!(matches!(
+            invalid_timeout.validate(),
+            Err(ConfigValidationError::InvalidHttpRequestTimeout)
+        ));
+
+        let invalid_concurrency = AppConfig {
+            http_max_concurrent_requests: 0,
+            ..AppConfig::default()
+        };
+        assert!(matches!(
+            invalid_concurrency.validate(),
+            Err(ConfigValidationError::InvalidHttpMaxConcurrentRequests)
+        ));
+
+        let invalid_body = AppConfig {
+            http_max_request_body_bytes: 67_108_865,
+            ..AppConfig::default()
+        };
+        assert!(matches!(
+            invalid_body.validate(),
+            Err(ConfigValidationError::InvalidHttpMaxRequestBodyBytes)
+        ));
+    }
+
+    #[test]
+    fn yaml_unknown_keys_warn_at_runtime_and_fail_checks() {
         let temporary_directory = tempdir().expect("temporary directory should be created");
         let config_path = temporary_directory.path().join("config.yaml");
         fs::write(
@@ -876,21 +961,21 @@ mod tests {
         .expect("configuration should be written");
         let values = environment(&[("APP_CONFIG_PATH", config_path.to_str().expect("UTF-8 path"))]);
 
-        let resolved = AppConfig::load_from_environment(values.clone(), false)
+        let resolved = AppConfig::load_from_environment(values.clone(), ConfigLoadMode::Runtime)
             .expect("compatible loading should succeed");
         assert_eq!(resolved.warnings.len(), 2);
         assert!(
             resolved
                 .warnings
                 .iter()
-                .any(|warning| { warning.code == "removed_key" && warning.key == "id_worker_id" })
+                .all(|warning| warning.code == "unknown_key")
         );
         assert!(resolved.warnings.iter().any(|warning| {
             warning.code == "unknown_key" && warning.key == "misspelled_timeout"
         }));
 
-        let error = AppConfig::load_from_environment(values, true)
-            .expect_err("strict loading should reject stale YAML keys");
+        let error = AppConfig::load_from_environment(values, ConfigLoadMode::Check)
+            .expect_err("configuration checks should reject unknown YAML keys");
         assert!(error.to_string().contains("id_worker_id"));
         assert!(error.to_string().contains("misspelled_timeout"));
     }
@@ -904,26 +989,22 @@ mod tests {
                 "postgres://localhost",
                 "must name a PostgreSQL database",
             ),
-            ("APP_DATABASE_POOL_SIZE", "0", "greater than 0"),
-            ("APP_DATABASE_ACQUIRE_TIMEOUT_MS", "0", "greater than 0"),
-            ("APP_SHUTDOWN_TIMEOUT_MS", "0", "greater than 0"),
         ] {
-            let error = AppConfig::load_from_environment(environment(&[(key, value)]), false)
-                .expect_err("invalid configuration should fail");
+            let error = AppConfig::load_from_environment(
+                environment(&[(key, value)]),
+                ConfigLoadMode::Runtime,
+            )
+            .expect_err("invalid configuration should fail");
             assert!(
                 error.to_string().contains(expected),
                 "unexpected error for {key}: {error}"
             );
         }
 
-        let memory_error = AppConfig::load_from_environment(
-            environment(&[
-                ("APP_DATABASE_URL", ":memory:"),
-                ("APP_DATABASE_POOL_SIZE", "2"),
-            ]),
-            false,
-        )
-        .expect_err("in-memory SQLite must use one connection");
+        let (_temporary_directory, values) =
+            file_environment("database_url: ':memory:'\ndatabase_pool_size: 2\n");
+        let memory_error = AppConfig::load_from_environment(values, ConfigLoadMode::Runtime)
+            .expect_err("in-memory SQLite must use one connection");
         assert!(
             memory_error
                 .to_string()
@@ -939,7 +1020,7 @@ mod tests {
 
         let error = AppConfig::load_from_environment(
             environment(&[("APP_DATA_DIR", file_path.to_str().expect("UTF-8 path"))]),
-            false,
+            ConfigLoadMode::Runtime,
         )
         .expect_err("file data path should fail");
         assert!(error.to_string().contains("not a directory"));

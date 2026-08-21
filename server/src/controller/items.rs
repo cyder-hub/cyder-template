@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::{
     app::AppState,
     controller::api_id::ApiId,
-    error::{AppError, AppResult},
+    error::{HttpError, HttpResult},
     service::items::{self, CreateItemInput, Item},
 };
 
@@ -39,7 +39,7 @@ pub struct DeleteItemResponse {
     pub deleted: bool,
 }
 
-pub async fn list_items(State(state): State<AppState>) -> AppResult<Json<Vec<ItemResponse>>> {
+pub async fn list_items(State(state): State<AppState>) -> HttpResult<Json<Vec<ItemResponse>>> {
     let items = items::list(state.database()).await?;
     Ok(Json(items.into_iter().map(ItemResponse::from).collect()))
 }
@@ -47,7 +47,7 @@ pub async fn list_items(State(state): State<AppState>) -> AppResult<Json<Vec<Ite
 pub async fn create_item(
     State(state): State<AppState>,
     Json(input): Json<CreateItemInput>,
-) -> AppResult<Json<ItemResponse>> {
+) -> HttpResult<Json<ItemResponse>> {
     items::create(state.database(), state.id_generator(), input)
         .await
         .map(ItemResponse::from)
@@ -57,13 +57,13 @@ pub async fn create_item(
 pub async fn get_item(
     State(state): State<AppState>,
     Path(item_id): Path<ApiId>,
-) -> AppResult<Json<ItemResponse>> {
+) -> HttpResult<Json<ItemResponse>> {
     let item_id = item_id.into_i64();
     items::get(state.database(), item_id)
         .await?
         .map(ItemResponse::from)
         .map(Json)
-        .ok_or(AppError::NotFound {
+        .ok_or(HttpError::NotFound {
             resource: "item",
             id: item_id,
         })
@@ -72,11 +72,11 @@ pub async fn get_item(
 pub async fn delete_item(
     State(state): State<AppState>,
     Path(item_id): Path<ApiId>,
-) -> AppResult<Json<DeleteItemResponse>> {
+) -> HttpResult<Json<DeleteItemResponse>> {
     let item_id = item_id.into_i64();
     let deleted = items::delete(state.database(), item_id).await?;
     if !deleted {
-        return Err(AppError::NotFound {
+        return Err(HttpError::NotFound {
             resource: "item",
             id: item_id,
         });

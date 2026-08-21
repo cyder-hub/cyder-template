@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { requestJson } from '@/services/http'
+import { messageFromError, requestJson } from '@/services/http'
 
 export interface HealthResponse {
   status: string
@@ -40,7 +40,7 @@ export const useAppStore = defineStore('app', {
         this.health = health
         this.readiness = readiness
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Unable to load service status'
+        this.error = messageFromError(error, 'Unable to load service status')
       } finally {
         this.loading = false
       }

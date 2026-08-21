@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { messageFromError } from '@/services/http'
 import { createItem, deleteItem, listItems, type Item } from '@/services/items'
 
 const items = ref<Item[]>([])
@@ -78,9 +79,6 @@ function formatTimestamp(value: number): string {
   }).format(new Date(value))
 }
 
-function messageFromError(source: unknown, fallback: string): string {
-  return source instanceof Error ? source.message : fallback
-}
 </script>
 
 <template>

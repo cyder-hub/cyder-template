@@ -1,7 +1,7 @@
 # This checked-in path is documentation only; the application never reads it.
 # Copy it to ${APP_DATA_DIR}/config/config.yaml, then uncomment only the
-# settings that differ from the built-in defaults. APP_* environment variables
-# explicitly provided by the caller take precedence over this file.
+# settings that differ from the built-in defaults. The documented common APP_*
+# environment variables explicitly provided by the caller take precedence.
 
 # host: 127.0.0.1
 # port: 8000
@@ -25,3 +25,8 @@
 # shutdown_readiness_delay_ms: 1000
 # Total budget from signal receipt, including the readiness delay.
 # shutdown_timeout_ms: 8000
+
+# Applied only to /api, /api/*, and /readyz.
+# http_request_timeout_ms: 30000
+# http_max_concurrent_requests: 64
+# http_max_request_body_bytes: 1048576

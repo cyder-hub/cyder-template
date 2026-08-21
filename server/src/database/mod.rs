@@ -24,7 +24,7 @@ use serde::Serialize;
 
 use crate::{
     config::DatabaseKind,
-    error::{AppError, AppResult},
+    error::{HttpError, HttpResult},
 };
 
 // The initializer uses an equivalent path spelling after removing example
@@ -89,13 +89,39 @@ pub enum DatabaseError {
     #[error("{backend} database pool checkout failed")]
     PoolCheckout {
         backend: &'static str,
-        message: String,
+        #[source]
+        source: DatabaseDiagnostic,
     },
     #[error("{backend} database operation failed")]
     Operation {
         backend: &'static str,
         source: diesel::result::Error,
     },
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct DatabaseDiagnostic {
+    message: String,
+    #[source]
+    source: Option<Box<dyn std::error::Error + Send + Sync>>,
+}
+
+impl DatabaseDiagnostic {
+    #[cfg(test)]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    fn with_source(source: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self {
+            message: source.to_string(),
+            source: Some(Box::new(source)),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -173,7 +199,7 @@ impl DbPool {
                     .map(DbConnection::Postgres)
                     .map_err(|source| DatabaseError::PoolCheckout {
                         backend: "postgres",
-                        message: source.to_string(),
+                        source: DatabaseDiagnostic::with_source(source),
                     })
             }
             Self::Sqlite(pool) => pool
@@ -182,7 +208,7 @@ impl DbPool {
                 .map(DbConnection::Sqlite)
                 .map_err(|source| DatabaseError::PoolCheckout {
                     backend: "sqlite",
-                    message: source.to_string(),
+                    source: DatabaseDiagnostic::with_source(source),
                 }),
         }
     }
@@ -210,11 +236,12 @@ struct ReadyRow {
     value: i32,
 }
 
-pub async fn check_readiness(pool: &DbPool) -> AppResult<DatabaseHealth> {
+pub async fn check_readiness(pool: &DbPool) -> HttpResult<DatabaseHealth> {
     let kind = pool.kind();
-    let mut conn = pool.get().await.map_err(|source| AppError::Readiness {
-        message: source.to_string(),
-    })?;
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|source| HttpError::readiness_with_source("database checkout failed", source))?;
 
     match &mut conn {
         DbConnection::Postgres(conn) => check_postgres_query(conn).await?,
@@ -227,34 +254,32 @@ pub async fn check_readiness(pool: &DbPool) -> AppResult<DatabaseHealth> {
     })
 }
 
-async fn check_postgres_query(conn: &mut PostgresConnection) -> AppResult<()> {
+async fn check_postgres_query(conn: &mut PostgresConnection) -> HttpResult<()> {
     let row = diesel::sql_query("SELECT 1 AS value")
         .get_result::<ReadyRow>(conn)
         .await
-        .map_err(|source| AppError::Readiness {
-            message: format!("postgres readiness query failed: {source}"),
+        .map_err(|source| {
+            HttpError::readiness_with_source("postgres readiness query failed", source)
         })?;
 
     ensure_ready_value(row, DatabaseKind::Postgres)
 }
 
-async fn check_sqlite_query(conn: &mut SqliteConnection) -> AppResult<()> {
+async fn check_sqlite_query(conn: &mut SqliteConnection) -> HttpResult<()> {
     let row = diesel::sql_query("SELECT 1 AS value")
         .get_result::<ReadyRow>(conn)
         .await
-        .map_err(|source| AppError::Readiness {
-            message: format!("sqlite readiness query failed: {source}"),
+        .map_err(|source| {
+            HttpError::readiness_with_source("sqlite readiness query failed", source)
         })?;
 
     ensure_ready_value(row, DatabaseKind::Sqlite)
 }
 
-fn ensure_ready_value(row: ReadyRow, kind: DatabaseKind) -> AppResult<()> {
-    (row.value == 1)
-        .then_some(())
-        .ok_or_else(|| AppError::Readiness {
-            message: format!("{kind} readiness query returned {}", row.value),
-        })
+fn ensure_ready_value(row: ReadyRow, kind: DatabaseKind) -> HttpResult<()> {
+    (row.value == 1).then_some(()).ok_or_else(|| {
+        HttpError::readiness(format!("{kind} readiness query returned {}", row.value))
+    })
 }
 
 async fn init_sqlite_pool(
@@ -723,7 +748,7 @@ mod tests {
         exercise_result.expect("postgres multi-connection CRUD/readiness should pass");
     }
 
-    async fn exercise_postgres_pool(pool: &DbPool, run_id: i64) -> AppResult<()> {
+    async fn exercise_postgres_pool(pool: &DbPool, run_id: i64) -> HttpResult<()> {
         let first_item = items::create(pool, new_postgres_test_item(run_id, 1));
         let second_item = items::create(pool, new_postgres_test_item(run_id, 2));
         let first_user = users::create(pool, new_postgres_test_user(run_id, 1));
@@ -774,7 +799,7 @@ mod tests {
         Ok(())
     }
 
-    async fn cleanup_postgres_test_records(pool: &DbPool, run_id: i64) -> AppResult<()> {
+    async fn cleanup_postgres_test_records(pool: &DbPool, run_id: i64) -> HttpResult<()> {
         for id in [
             postgres_test_id(run_id, 1),
             postgres_test_id(run_id, 2),

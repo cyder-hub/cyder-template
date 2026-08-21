@@ -1,15 +1,13 @@
-use std::net::AddrParseError;
+use std::{error::Error, net::AddrParseError, sync::Arc};
 
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use serde::Serialize;
 
 pub type AppResult<T> = Result<T, AppError>;
-
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-}
+pub type HttpResult<T> = Result<T, HttpError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -33,21 +31,12 @@ pub enum AppError {
         #[from]
         source: crate::database::DatabaseInitError,
     },
-    #[error("database error: {source}")]
-    Database {
-        #[from]
-        source: crate::database::DatabaseError,
-    },
-    #[error("id generation failed: {source}")]
+    #[error("id generator initialization failed: {source}")]
     Id {
         #[from]
         source: crate::id::IdError,
     },
-    // template-example:start
-    #[error("{resource} {id} was not found")]
-    NotFound { resource: &'static str, id: i64 },
-    // template-example:end
-    #[error("readiness check failed: {message}")]
+    #[error("readiness probe failed: {message}")]
     Readiness { message: String },
     #[error("failed to install shutdown signal handler: {source}")]
     ShutdownSignal { source: std::io::Error },
@@ -59,98 +48,203 @@ pub enum AppError {
     Internal { message: String },
 }
 
-impl IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        let status = self.status_code();
-        let message = match &self {
-            AppError::DatabaseInit { .. } | AppError::Database { .. } => {
-                "internal database error".to_string()
-            }
-            AppError::Readiness { .. } => "service is not ready".to_string(),
-            _ => self.to_string(),
-        };
-        let body = ErrorResponse {
-            error: self.error_code().to_string(),
-            message,
-        };
-        (status, Json(body)).into_response()
+#[derive(Debug, thiserror::Error)]
+pub enum HttpError {
+    #[error("database request failed: {source}")]
+    Database {
+        #[from]
+        source: crate::database::DatabaseError,
+    },
+    #[error("request ID generation failed: {source}")]
+    Id {
+        #[from]
+        source: crate::id::IdError,
+    },
+    // template-example:start
+    #[error("{resource} {id} was not found")]
+    NotFound { resource: &'static str, id: i64 },
+    // template-example:end
+    #[error("API route was not found")]
+    ApiNotFound,
+    #[error("readiness check failed: {source}")]
+    Readiness {
+        #[source]
+        source: DiagnosticError,
+    },
+    // template-example:start
+    #[error("system clock is before the Unix epoch: {source}")]
+    Clock {
+        #[source]
+        source: std::time::SystemTimeError,
+    },
+    #[error("current timestamp exceeds the signed 64-bit range")]
+    TimestampOverflow,
+    // template-example:end
+}
+
+impl HttpError {
+    pub fn readiness(message: impl Into<String>) -> Self {
+        Self::Readiness {
+            source: DiagnosticError::new(message),
+        }
+    }
+
+    pub fn readiness_with_source(
+        message: impl Into<String>,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self::Readiness {
+            source: DiagnosticError::with_source(message, source),
+        }
+    }
+
+    pub(crate) fn public_error(&self) -> PublicError {
+        match self {
+            // template-example:start
+            Self::NotFound { .. } => PublicError {
+                status: StatusCode::NOT_FOUND,
+                code: "not_found",
+                message: self.to_string(),
+            },
+            // template-example:end
+            Self::ApiNotFound => PublicError {
+                status: StatusCode::NOT_FOUND,
+                code: "not_found",
+                message: "API route was not found".to_string(),
+            },
+            Self::Readiness { .. } => PublicError {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                code: "readiness_failed",
+                message: "service is not ready".to_string(),
+            },
+            Self::Database { .. } | Self::Id { .. } => PublicError::internal(),
+            // template-example:start
+            Self::Clock { .. } | Self::TimestampOverflow => PublicError::internal(),
+            // template-example:end
+        }
     }
 }
 
-impl AppError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            AppError::Readiness { .. } => StatusCode::SERVICE_UNAVAILABLE,
-            // template-example:start
-            AppError::NotFound { .. } => StatusCode::NOT_FOUND,
-            // template-example:end
-            AppError::Config { .. } | AppError::BindAddress { .. } => StatusCode::BAD_REQUEST,
-            AppError::Server { .. }
-            | AppError::DatabaseInit { .. }
-            | AppError::Database { .. }
-            | AppError::Id { .. }
-            | AppError::ShutdownSignal { .. }
-            | AppError::ShutdownTimeout { .. }
-            | AppError::ShutdownForced { .. }
-            | AppError::Internal { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub struct DiagnosticError {
+    message: String,
+    #[source]
+    source: Option<Box<dyn Error + Send + Sync>>,
+}
+
+impl DiagnosticError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            source: None,
         }
     }
 
-    fn error_code(&self) -> &'static str {
-        match self {
-            AppError::Config { .. } => "config_error",
-            AppError::BindAddress { .. } => "bind_address_error",
-            AppError::Server { .. } => "server_error",
-            AppError::DatabaseInit { .. } => "database_init_error",
-            AppError::Database { .. } => "database_error",
-            AppError::Id { .. } => "id_error",
-            // template-example:start
-            AppError::NotFound { .. } => "not_found",
-            // template-example:end
-            AppError::Readiness { .. } => "readiness_failed",
-            AppError::ShutdownSignal { .. } => "shutdown_signal_error",
-            AppError::ShutdownTimeout { .. } => "shutdown_timeout",
-            AppError::ShutdownForced { .. } => "shutdown_forced",
-            AppError::Internal { .. } => "internal_error",
+    fn with_source(message: impl Into<String>, source: impl Error + Send + Sync + 'static) -> Self {
+        Self {
+            message: message.into(),
+            source: Some(Box::new(source)),
         }
     }
+}
+
+impl IntoResponse for HttpError {
+    fn into_response(self) -> Response {
+        let status = self.public_error().status;
+        let mut response = status.into_response();
+        response
+            .extensions_mut()
+            .insert(HttpErrorContext(Arc::new(self)));
+        response
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct HttpErrorContext(pub Arc<HttpError>);
+
+#[derive(Debug, Clone)]
+pub(crate) struct PublicError {
+    pub status: StatusCode,
+    pub code: &'static str,
+    pub message: String,
+}
+
+impl PublicError {
+    pub(crate) fn internal() -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            code: "internal_error",
+            message: "internal server error".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
+    pub request_id: String,
+}
+
+pub(crate) fn format_error_chain(error: &(dyn Error + 'static)) -> String {
+    let mut messages = Vec::new();
+    let mut current = Some(error);
+    while let Some(source) = current.take() {
+        messages.push(redact_diagnostic(&source.to_string()));
+        if messages.len() == 16 {
+            messages.push("additional causes omitted".to_string());
+            break;
+        }
+        current = source.source();
+    }
+    messages.join(": ")
+}
+
+pub(crate) fn redact_diagnostic(value: &str) -> String {
+    let mut redacted = value.to_string();
+    for scheme in ["postgres://", "postgresql://"] {
+        while let Some(start) = redacted.find(scheme) {
+            let end = redacted[start..]
+                .find(|character: char| {
+                    character.is_whitespace()
+                        || matches!(character, '\'' | '"' | ')' | ']' | '}' | ',')
+                })
+                .map_or(redacted.len(), |offset| start + offset);
+            redacted.replace_range(start..end, "[REDACTED_DATABASE_URL]");
+        }
+    }
+    redacted
 }
 
 #[cfg(test)]
 mod tests {
-    use axum::body::to_bytes;
-
     use super::*;
 
-    #[tokio::test]
-    async fn database_http_errors_never_expose_internal_details() {
-        let secret = "unique-database-secret-marker";
-        let response = AppError::Database {
+    #[test]
+    fn internal_http_errors_have_one_public_contract() {
+        let error = HttpError::Database {
             source: crate::database::DatabaseError::PoolCheckout {
                 backend: "postgres",
-                message: format!("postgres://app:{secret}@database/app"),
+                source: crate::database::DatabaseDiagnostic::new("connection unavailable"),
             },
-        }
-        .into_response();
+        };
+        let public = error.public_error();
 
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        let body = to_bytes(response.into_body(), 1024)
-            .await
-            .expect("response body should read");
-        let body = String::from_utf8(body.to_vec()).expect("response body should be UTF-8");
-        assert!(!body.contains(secret));
-        assert!(body.contains("internal database error"));
+        assert_eq!(public.status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(public.code, "internal_error");
+        assert_eq!(public.message, "internal server error");
+    }
 
-        let readiness = AppError::Readiness {
-            message: format!("postgres://app:{secret}@database/app"),
-        }
-        .into_response();
-        assert_eq!(readiness.status(), StatusCode::SERVICE_UNAVAILABLE);
-        let body = to_bytes(readiness.into_body(), 1024)
-            .await
-            .expect("response body should read");
-        let body = String::from_utf8(body.to_vec()).expect("response body should be UTF-8");
-        assert!(!body.contains(secret));
-        assert!(body.contains("service is not ready"));
+    #[test]
+    fn diagnostic_chains_redact_database_urls() {
+        let secret = "unique-database-secret-marker";
+        let error = AppError::Internal {
+            message: format!("failed for postgres://app:{secret}@database/app"),
+        };
+        let chain = format_error_chain(&error);
+
+        assert!(!chain.contains(secret));
+        assert!(chain.contains("[REDACTED_DATABASE_URL]"));
     }
 }

@@ -3,17 +3,20 @@ export const API_BASE = '/api'
 export interface ApiErrorBody {
   error: string
   message: string
+  request_id: string | null
 }
 
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
+  readonly requestId: string | null
 
   constructor(status: number, body: ApiErrorBody) {
     super(body.message)
     this.name = 'ApiError'
     this.status = status
     this.code = body.error
+    this.requestId = body.request_id
   }
 }
 
@@ -36,16 +39,32 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
 
   const response = await fetch(path, init)
   const text = await response.text()
-  const data: unknown = text ? JSON.parse(text) : null
+  let data: unknown = null
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch (source) {
+      if (response.ok) {
+        throw source
+      }
+    }
+  }
 
   if (!response.ok) {
-    throw new ApiError(response.status, normalizeErrorBody(data, response.status))
+    throw new ApiError(
+      response.status,
+      normalizeErrorBody(data, response.status, response.headers.get('x-request-id')),
+    )
   }
 
   return data as T
 }
 
-function normalizeErrorBody(data: unknown, status: number): ApiErrorBody {
+function normalizeErrorBody(
+  data: unknown,
+  status: number,
+  responseRequestId: string | null,
+): ApiErrorBody {
   if (
     data &&
     typeof data === 'object' &&
@@ -57,11 +76,26 @@ function normalizeErrorBody(data: unknown, status: number): ApiErrorBody {
     return {
       error: data.error,
       message: data.message,
+      request_id:
+        'request_id' in data && typeof data.request_id === 'string'
+          ? data.request_id
+          : responseRequestId,
     }
   }
 
   return {
     error: 'request_failed',
     message: `Request failed with status ${status}`,
+    request_id: responseRequestId,
   }
+}
+
+export function messageFromError(source: unknown, fallback: string): string {
+  if (source instanceof ApiError) {
+    if ((source.status >= 500 || source.status === 408) && source.requestId) {
+      return `${source.message} (Reference: ${source.requestId})`
+    }
+    return source.message
+  }
+  return source instanceof Error ? source.message : fallback
 }

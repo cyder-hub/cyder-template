@@ -165,5 +165,8 @@ jobs:
       - name: Test container configuration contract
         run: bash scripts/test-container-config.sh cyder-template:ci
 
+      - name: Test container HTTP and static-asset contract
+        run: bash scripts/test-container-http.sh cyder-template:ci
+
       - name: Test graceful container shutdown
         run: bash scripts/test-container-shutdown.sh cyder-template:ci
