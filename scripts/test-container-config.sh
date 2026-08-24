@@ -8,7 +8,7 @@ if [[ -z "$image" ]]; then
 fi
 
 temporary_directory="$(mktemp -d)"
-health_container="cyder-music-config-health-${GITHUB_RUN_ID:-local}-$$"
+health_container="cyder-template-config-health-${GITHUB_RUN_ID:-local}-$$"
 
 cleanup() {
   docker rm -f "$health_container" >/dev/null 2>&1 || true
@@ -25,13 +25,13 @@ trap cleanup EXIT
 docker image inspect "$image" >/dev/null
 
 layout="$(docker run --rm "$image" /bin/sh -c '
-  test -x /app/bin/cyder-music
+  test -x /app/bin/cyder-template
   test -f /app/front/dist/index.html
   test -d /data/config
   test -d /data/db
   test -d /data/storage
   test -d /data/logs
-  test -d /tmp/cyder-music
+  test -d /tmp/cyder-template
   id -u
 ')"
 if [[ "$layout" != "10001" ]]; then

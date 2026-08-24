@@ -1,0 +1,9 @@
+{
+  "identity": {
+    "projectSlug": "cyder-template",
+    "rustIdentifier": "cyder_template",
+    "frontendPackage": "cyder-template-front",
+    "displayName": "cyder-template",
+    "githubRepository": "cyder-hub/cyder-template"
+  }
+}

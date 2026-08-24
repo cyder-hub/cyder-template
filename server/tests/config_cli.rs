@@ -4,7 +4,7 @@ use serde_json::Value;
 use tempfile::tempdir;
 
 fn application_command() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_cyder-music"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_cyder-template"));
     command.env_clear();
     command
 }

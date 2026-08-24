@@ -39,4 +39,4 @@ body:
       placeholder: |
         cargo test --workspace
         npm --prefix front run build
-        docker build -t cyder-music:ci -f Dockerfile .
+        docker build -t cyder-template:ci -f Dockerfile .

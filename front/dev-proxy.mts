@@ -106,7 +106,7 @@ export function queryRustConfigEndpoint(): string {
       '--quiet',
       '--locked',
       '-p',
-      'cyder-music',
+      'cyder-template',
       '--',
       'config',
       'endpoint',

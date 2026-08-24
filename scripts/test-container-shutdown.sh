@@ -7,7 +7,7 @@ if [[ -z "$image" ]]; then
   exit 2
 fi
 
-container_name="cyder-music-shutdown-${GITHUB_RUN_ID:-local}-$$"
+container_name="cyder-template-shutdown-${GITHUB_RUN_ID:-local}-$$"
 
 cleanup() {
   docker rm -f "$container_name" >/dev/null 2>&1 || true
@@ -43,7 +43,7 @@ if [[ "$ready" != "true" ]]; then
   fail "container did not become ready within 30 seconds"
 fi
 
-if ! docker exec "$container_name" test -f /data/db/cyder-music.sqlite; then
+if ! docker exec "$container_name" test -f /data/db/cyder-template.sqlite; then
   fail "default SQLite database was not created under /data/db"
 fi
 

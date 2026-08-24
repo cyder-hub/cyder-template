@@ -60,6 +60,10 @@ pub enum HttpError {
         #[from]
         source: crate::id::IdError,
     },
+    // template-example:start
+    #[error("{resource} {id} was not found")]
+    NotFound { resource: &'static str, id: i64 },
+    // template-example:end
     #[error("API route was not found")]
     ApiNotFound,
     #[error("readiness check failed: {source}")]
@@ -67,6 +71,15 @@ pub enum HttpError {
         #[source]
         source: DiagnosticError,
     },
+    // template-example:start
+    #[error("system clock is before the Unix epoch: {source}")]
+    Clock {
+        #[source]
+        source: std::time::SystemTimeError,
+    },
+    #[error("current timestamp exceeds the signed 64-bit range")]
+    TimestampOverflow,
+    // template-example:end
 }
 
 impl HttpError {
@@ -87,6 +100,13 @@ impl HttpError {
 
     pub(crate) fn public_error(&self) -> PublicError {
         match self {
+            // template-example:start
+            Self::NotFound { .. } => PublicError {
+                status: StatusCode::NOT_FOUND,
+                code: "not_found",
+                message: self.to_string(),
+            },
+            // template-example:end
             Self::ApiNotFound => PublicError {
                 status: StatusCode::NOT_FOUND,
                 code: "not_found",
@@ -98,6 +118,9 @@ impl HttpError {
                 message: "service is not ready".to_string(),
             },
             Self::Database { .. } | Self::Id { .. } => PublicError::internal(),
+            // template-example:start
+            Self::Clock { .. } | Self::TimestampOverflow => PublicError::internal(),
+            // template-example:end
         }
     }
 }

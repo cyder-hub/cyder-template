@@ -15,8 +15,8 @@ Commands run:
 - [ ] `npm --prefix front run build`
 - [ ] `just audit`
 - [ ] `docker compose -f docker-compose.yml config`
-- [ ] `docker build -t cyder-music:ci -f Dockerfile .`
-- [ ] `bash scripts/test-container-config.sh cyder-music:ci` (runtime configuration or packaging changes)
+- [ ] `docker build -t cyder-template:ci -f Dockerfile .`
+- [ ] `bash scripts/test-container-config.sh cyder-template:ci` (runtime configuration or packaging changes)
 - [ ] Not run; reason:
 
 ## Impact

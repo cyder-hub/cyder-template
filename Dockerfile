@@ -24,7 +24,7 @@ RUN apt-get update \
 
 COPY Cargo.toml Cargo.lock ./
 COPY server/ server/
-RUN cargo build -p cyder-music --release --locked
+RUN cargo build -p cyder-template --release --locked
 
 FROM debian:bookworm-slim AS runtime
 
@@ -40,13 +40,13 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY --from=backend /workspace/target/release/cyder-music /app/bin/cyder-music
+COPY --from=backend /workspace/target/release/cyder-template /app/bin/cyder-template
 COPY --from=frontend /workspace/front/dist /app/front/dist
 COPY docker-entrypoint /app/bin/docker-entrypoint
 
 RUN chmod +x /app/bin/docker-entrypoint \
-    && mkdir -p /data/config /data/db /data/storage /data/logs /tmp/cyder-music \
-    && chown -R app:app /app /data /tmp/cyder-music
+    && mkdir -p /data/config /data/db /data/storage /data/logs /tmp/cyder-template \
+    && chown -R app:app /app /data /tmp/cyder-template
 
 ENV APP_HOST=0.0.0.0 \
     APP_DATA_DIR=/data
@@ -54,7 +54,7 @@ ENV APP_HOST=0.0.0.0 \
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["gosu", "app", "/app/bin/cyder-music", "healthcheck"]
+    CMD ["gosu", "app", "/app/bin/cyder-template", "healthcheck"]
 
 ENTRYPOINT ["/app/bin/docker-entrypoint"]
-CMD ["/app/bin/cyder-music"]
+CMD ["/app/bin/cyder-template"]
