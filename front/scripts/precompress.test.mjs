@@ -4,10 +4,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import {
-  brotliDecompress as brotliDecompressCallback,
-  gunzip as gunzipCallback,
-} from 'node:zlib'
+import { brotliDecompress as brotliDecompressCallback, gunzip as gunzipCallback } from 'node:zlib'
 import test from 'node:test'
 
 import { precompressDirectory } from './precompress.mjs'

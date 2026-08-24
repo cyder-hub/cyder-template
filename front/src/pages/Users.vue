@@ -85,7 +85,6 @@ function formatTimestamp(value: number): string {
     timeStyle: 'short',
   }).format(new Date(value))
 }
-
 </script>
 
 <template>
@@ -115,7 +114,12 @@ function formatTimestamp(value: number): string {
         <form class="resource-form" @submit.prevent="submitUser">
           <label class="form-field">
             <span>Name</span>
-            <input v-model="name" class="text-input" autocomplete="name" placeholder="Example User" />
+            <input
+              v-model="name"
+              class="text-input"
+              autocomplete="name"
+              placeholder="Example User"
+            />
           </label>
 
           <label class="form-field">

@@ -11,12 +11,16 @@ Commands run:
 - [ ] `cargo test --workspace --locked`
 - [ ] `DEV_POSTGRES_TEST_URL=... just test-postgres` (database changes that affect PostgreSQL)
 - [ ] `npm --prefix front ci`
+- [ ] `npm --prefix front run format:check`
+- [ ] `npm --prefix front run lint`
+- [ ] `npm --prefix front run typecheck`
 - [ ] `npm --prefix front test`
 - [ ] `npm --prefix front run build`
 - [ ] `just audit`
 - [ ] `docker compose -f docker-compose.yml config`
 - [ ] `docker build -t cyder-template:ci -f Dockerfile .`
 - [ ] `bash scripts/test-container-config.sh cyder-template:ci` (runtime configuration or packaging changes)
+- [ ] `bash scripts/test-container-e2e.sh cyder-template:ci` (frontend navigation or image changes)
 - [ ] Not run; reason:
 
 ## Impact

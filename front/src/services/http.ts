@@ -6,6 +6,18 @@ export interface ApiErrorBody {
   request_id: string | null
 }
 
+export type ClientErrorKind = 'invalid_response' | 'network'
+
+export class ClientError extends Error {
+  readonly kind: ClientErrorKind
+
+  constructor(kind: ClientErrorKind, message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'ClientError'
+    this.kind = kind
+  }
+}
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
@@ -37,15 +49,29 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
     init.body = JSON.stringify(body)
   }
 
-  const response = await fetch(path, init)
-  const text = await response.text()
+  let response: Response
+  try {
+    response = await fetch(path, init)
+  } catch (source) {
+    throw new ClientError('network', 'Unable to reach the service', { cause: source })
+  }
+
+  let text: string
+  try {
+    text = await response.text()
+  } catch (source) {
+    throw new ClientError('network', 'Unable to reach the service', { cause: source })
+  }
+
   let data: unknown = null
   if (text) {
     try {
       data = JSON.parse(text)
     } catch (source) {
       if (response.ok) {
-        throw source
+        throw new ClientError('invalid_response', 'The service returned an invalid response', {
+          cause: source,
+        })
       }
     }
   }
@@ -55,6 +81,10 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
       response.status,
       normalizeErrorBody(data, response.status, response.headers.get('x-request-id')),
     )
+  }
+
+  if (!text) {
+    throw new ClientError('invalid_response', 'The service returned an invalid response')
   }
 
   return data as T
@@ -85,7 +115,7 @@ function normalizeErrorBody(
 
   return {
     error: 'request_failed',
-    message: `Request failed with status ${status}`,
+    message: `Request failed with status ${String(status)}`,
     request_id: responseRequestId,
   }
 }

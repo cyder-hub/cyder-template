@@ -38,10 +38,7 @@ export async function precompressDirectory(directory) {
 
     const brotliPath = `${file}.br`
     const gzipPath = `${file}.gz`
-    await Promise.all([
-      rm(brotliPath, { force: true }),
-      rm(gzipPath, { force: true }),
-    ])
+    await Promise.all([rm(brotliPath, { force: true }), rm(gzipPath, { force: true })])
 
     const source = await readFile(file)
     if (source.byteLength < MINIMUM_SOURCE_BYTES) {

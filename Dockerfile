@@ -10,7 +10,7 @@ COPY front/package.json front/package-lock.json ./
 RUN npm ci
 
 COPY front/ ./
-RUN npm run build
+RUN npm run typecheck && npm run build
 
 FROM rust:${RUST_VERSION}-bookworm AS backend
 WORKDIR /workspace

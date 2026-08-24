@@ -192,6 +192,11 @@ function assertInitializedFixture(fixture, expected) {
   assert.equal(app.includes('template-example:'), false)
   assert.equal(app.includes('/api/items'), false)
   assert.equal(existsSync(join(fixture.repository, 'front/src/pages/Items.vue')), false)
+  assert.equal(existsSync(join(fixture.repository, 'front/tests/Items.test.ts')), false)
+  assert.equal(existsSync(join(fixture.repository, 'front/tests/services.test.ts')), false)
+  assert.equal(existsSync(join(fixture.repository, 'front/tests/Users.test.ts')), false)
+  assert.equal(existsSync(join(fixture.repository, 'front/e2e/items.spec.ts')), false)
+  assert.equal(existsSync(join(fixture.repository, 'front/e2e/dashboard.spec.ts')), true)
   assert.equal(
     existsSync(join(fixture.repository, 'server/migrations/sqlite/.gitkeep')),
     true,
@@ -284,6 +289,7 @@ test('removes complete marker blocks and preserves CRLF', () => {
 
 test('initializes one clean project and removes all template lifecycle files', () => {
   const fixture = createFixture('sample-service')
+  const productImage = `cyder-template:c3-product-${process.pid}`
   try {
     const answers = {
       projectSlug: 'sample-service',
@@ -295,13 +301,27 @@ test('initializes one clean project and removes all template lifecycle files', (
     assert.equal(result.status, 0, result.stderr)
     assertInitializedFixture(fixture, answers)
 
-    if (process.env.DEV_TEMPLATE_PRODUCT_CHECK === '1') {
+    if (
+      process.env.DEV_TEMPLATE_PRODUCT_CHECK === '1' ||
+      process.env.DEV_TEMPLATE_CONTAINER_CHECK === '1'
+    ) {
       run('just', ['check'], {
         cwd: fixture.repository,
         env: { CARGO_TARGET_DIR: PRODUCT_CARGO_TARGET },
       })
       run('docker', ['compose', '-f', 'docker-compose.yml', 'config'], {
         cwd: fixture.repository,
+      })
+    }
+
+    if (process.env.DEV_TEMPLATE_CONTAINER_CHECK === '1') {
+      run('docker', ['build', '--quiet', '-t', productImage, '-f', 'Dockerfile', '.'], {
+        cwd: fixture.repository,
+        inherit: true,
+      })
+      run('bash', ['scripts/test-container-e2e.sh', productImage], {
+        cwd: fixture.repository,
+        inherit: true,
       })
     }
 
@@ -312,6 +332,12 @@ test('initializes one clean project and removes all template lifecycle files', (
     assert.notEqual(repeat.status, 0)
     assert.match(repeat.stderr, /MODULE_NOT_FOUND/)
   } finally {
+    if (process.env.DEV_TEMPLATE_CONTAINER_CHECK === '1') {
+      run('docker', ['image', 'rm', '--force', productImage], {
+        cwd: fixture.repository,
+        allowFailure: true,
+      })
+    }
     fixture.cleanup()
   }
 })
@@ -395,8 +421,14 @@ test('rejects drifted marker structure without partial writes', () => {
   const fixture = createFixture('drifted-service')
   try {
     const readmePath = join(fixture.repository, 'README.md')
-    const readme = readFileSync(readmePath, 'utf8').replace('<!-- template-init:end -->', '')
-    writeFileSync(readmePath, readme)
+    const readme = readFileSync(readmePath, 'utf8')
+    const marker = '<!-- template-init:end -->'
+    const markerIndex = readme.lastIndexOf(marker)
+    assert.notEqual(markerIndex, -1)
+    writeFileSync(
+      readmePath,
+      `${readme.slice(0, markerIndex)}${readme.slice(markerIndex + marker.length)}`,
+    )
     run('git', ['add', 'README.md'], { cwd: fixture.repository })
     run('git', ['commit', '-m', 'drift marker'], { cwd: fixture.repository })
 

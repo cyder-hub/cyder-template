@@ -119,7 +119,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test frontend
+      - name: Check frontend formatting
+        run: npm run format:check
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Type check frontend
+        run: npm run typecheck
+
+      - name: Test frontend with coverage
         run: npm test
 
       - name: Build frontend
@@ -128,17 +137,19 @@ jobs:
   docker:
     name: Docker
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # template-init:start
-      - name: Set up pinned Node for template initialization
+      - name: Set up pinned Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: front/package-lock.json
 
+      # template-init:start
       - name: Activate pinned Rust toolchain for template initialization
         shell: bash
         run: |
@@ -168,5 +179,80 @@ jobs:
       - name: Test container HTTP and static-asset contract
         run: bash scripts/test-container-http.sh cyder-template:ci
 
+      - name: Install frontend E2E dependencies
+        run: npm --prefix front ci
+
+      - name: Install pinned Chromium
+        run: npm --prefix front exec -- playwright install --with-deps chromium
+
+      - name: Test initialized image browser path
+        run: bash scripts/test-container-e2e.sh cyder-template:ci
+
+      - name: Upload initialized image E2E diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: initialized-image-e2e-${{ github.run_attempt }}
+          path: |
+            front/playwright-report
+            front/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Test graceful container shutdown
         run: bash scripts/test-container-shutdown.sh cyder-template:ci
+
+  # template-init:start
+  template-frontend-e2e:
+    name: Template Frontend and E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pinned Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - name: Install dependencies
+        run: npm --prefix front ci
+
+      - name: Check frontend formatting
+        run: npm --prefix front run format:check
+
+      - name: Lint frontend
+        run: npm --prefix front run lint
+
+      - name: Type check frontend
+        run: npm --prefix front run typecheck
+
+      - name: Test frontend with coverage
+        run: npm --prefix front test
+
+      - name: Build frontend
+        run: npm --prefix front run build
+
+      - name: Install pinned Chromium
+        run: npm --prefix front exec -- playwright install --with-deps chromium
+
+      - name: Build template image
+        run: docker build -t cyder-template:template-ci -f Dockerfile .
+
+      - name: Test template image browser CRUD path
+        run: bash scripts/test-container-e2e.sh cyder-template:template-ci
+
+      - name: Upload template image E2E diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: template-image-e2e-${{ github.run_attempt }}
+          path: |
+            front/playwright-report
+            front/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+  # template-init:end
