@@ -3,10 +3,7 @@ import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 
-import {
-  DEV_PROXY_TARGET_ENV,
-  validateProxyTarget,
-} from './dev-proxy.mts'
+import { DEV_PROXY_TARGET_ENV, validateProxyTarget } from './dev-proxy.mts'
 
 export const createViteConfig = defineConfig(({ command, isPreview }) => {
   const isDevelopmentServer = command === 'serve' && !isPreview

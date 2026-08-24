@@ -169,12 +169,36 @@ test-postgres:
 check-config:
 	cd '{{justfile_directory()}}' && cargo run --quiet --locked -p cyder-template -- config check
 
-# Run frontend checks.
+# Run frontend tests.
 test-front: front-ci-deps
 	npm --prefix '{{justfile_directory()}}/front' test
 
+# Type check the frontend application, tests, and tooling.
+typecheck-front: front-ci-deps
+	npm --prefix '{{justfile_directory()}}/front' run typecheck
+
+# Run strict TypeScript and Vue lints.
+lint-front: front-ci-deps
+	npm --prefix '{{justfile_directory()}}/front' run lint
+
+# Format frontend source and configuration files.
+format-front: front-ci-deps
+	npm --prefix '{{justfile_directory()}}/front' run format
+
+# Check frontend formatting without modifying files.
+format-front-check: front-ci-deps
+	npm --prefix '{{justfile_directory()}}/front' run format:check
+
+# Run every frontend quality gate after one locked dependency install.
+check-front: front-ci-deps
+	npm --prefix '{{justfile_directory()}}/front' run format:check
+	npm --prefix '{{justfile_directory()}}/front' run lint
+	npm --prefix '{{justfile_directory()}}/front' run typecheck
+	npm --prefix '{{justfile_directory()}}/front' test
+	npm --prefix '{{justfile_directory()}}/front' run build
+
 # Run the local aggregate verification suite.
-check: test-toolchain fmt-check lint-backend test-backend test-front build-front
+check: test-toolchain fmt-check lint-backend test-backend check-front
 
 # Audit locked dependencies and dependency policy.
 audit:
@@ -227,3 +251,11 @@ test-container-config image="cyder-template:local":
 # Verify HTTP boundaries and static assets in an already-built image.
 test-container-http image="cyder-template:local":
 	bash '{{justfile_directory()}}/scripts/test-container-http.sh' "{{image}}"
+
+# Install the pinned Chromium browser for container E2E tests.
+setup-e2e: front-ci-deps
+	npm --prefix '{{justfile_directory()}}/front' exec -- playwright install chromium
+
+# Verify the browser user path in an already-built container image.
+test-container-e2e image="cyder-template:local":
+	bash '{{justfile_directory()}}/scripts/test-container-e2e.sh' "{{image}}"

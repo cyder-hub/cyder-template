@@ -76,15 +76,21 @@ just dev-front           # frontend only
 just install-front-deps  # npm ci when package files changed
 just front-ci-deps       # npm ci
 just build               # backend release binary and frontend dist
-just test                # backend and frontend tests/type checks
+just test                # backend and frontend tests
 just test-postgres       # optional PostgreSQL integration tests
 just check-config        # side-effect-free deployment configuration validation
 just lint-backend        # strict Rust lints for all targets/features
+just lint-front          # strict type-aware TypeScript/Vue lints
+just typecheck-front     # frontend application, tests, and tooling types
+just format-front-check  # frontend formatting without writes
+just check-front         # format, lint, type, coverage tests, build
 just check               # toolchain contracts, fmt, lint, tests, build
 just audit               # locked dependency advisories and policy
 just docker-build        # local Docker image build
 just test-container-config # configuration and data-layout image contract
 just test-container-http # HTTP and static-asset image contract
+just setup-e2e           # one-time pinned Chromium installation
+just test-container-e2e  # Chromium user path against the local image
 just test-container-shutdown # graceful SIGTERM test for the local image
 ```
 
@@ -275,14 +281,33 @@ just test-container-shutdown
 
 ## Frontend
 
-The frontend lives in `front/` and uses Vue 3, Vite, TypeScript, Pinia, and Vue Router.
+The frontend lives in `front/` and uses Vue 3, Vite, TypeScript, Pinia, and Vue Router. ESLint applies type-aware `strict-type-checked` and Vue rules with zero warnings; Prettier is the only frontend formatter. Vitest and Vue Test Utils run application tests in jsdom, while the existing Vite proxy and precompression contracts continue to run with Node's test runner.
 
 ```bash
 npm --prefix front ci
 npm --prefix front run dev
-npm --prefix front run build
+npm --prefix front run format:check
+npm --prefix front run lint
+npm --prefix front run typecheck
 npm --prefix front test
+npm --prefix front run build
 ```
+
+`npm test` runs tests only; type checking, linting, formatting, and production build remain separate gates. The Vitest V8 coverage gate includes frontend pages, services, and Store code. It requires 80% global lines/statements/functions, 75% global branches, and at least 60% for every included file. Use `npm --prefix front run test:unit:watch` for an iterative unit-test loop.
+
+The Playwright contract uses one Chromium worker against a complete image with its default SQLite database. It checks the Dashboard health/readiness UI and records traces, screenshots, and video only for failures.
+<!-- template-example:start -->
+The template source additionally creates and deletes an Item through the real browser, Rust API, and database; initialization removes that example-only spec with the example resource.
+<!-- template-example:end -->
+Build and test the exact same image separately:
+
+```bash
+just setup-e2e
+just docker-build
+just test-container-e2e
+```
+
+`just setup-e2e` installs the pinned Chromium browser but never assumes administrator access. On Linux, Playwright reports any missing host libraries; installing those distribution packages requires an administrator. GitHub Actions installs both Chromium and its host dependencies explicitly.
 
 The production backend serves the fixed `front/dist` artifact after `just build-front`, including its generated Brotli and gzip sidecars.
 
@@ -323,8 +348,13 @@ Compose builds the same `cyder-template:local` image, starts a local PostgreSQL 
 This repository includes `.github/workflows/ci.yml`. The workflow runs on pull requests, pushes to `main` or `master`, and manual dispatch:
 
 - `Backend`: activates Rust 1.97.1 from `rust-toolchain.toml` with rustfmt and Clippy plus native build dependencies, then runs Rust formatting, strict workspace linting across all targets/features, and workspace tests.
-- `Frontend`: reads Node 24.19.0 from `.node-version`, checks the applicable tooling contracts, runs locked npm install, type checks through `npm test`, and builds the Vite app.
-- `Docker`: validates `docker-compose.yml`, builds `cyder-template:ci`, checks its safe configuration/data-layout and HTTP/static-asset contracts, then verifies graceful SIGTERM handling within Docker's default stop deadline.
+- `Frontend`: reads Node 24.19.0 from `.node-version`, checks the applicable tooling contracts, initializes the no-example project, then displays formatting, strict lint, type checking, coverage tests, and production build as separate steps.
+- `Docker`: validates the initialized project's Compose file, builds `cyder-template:ci`, checks configuration/data-layout and HTTP/static-asset contracts, runs the Dashboard Playwright path, then verifies graceful SIGTERM handling.
+<!-- template-init:start -->
+- `Template Frontend and E2E`: checks the template source's formatting, lint, types, coverage tests, and build, then builds a second image and runs the example Item CRUD browser path. This template-only job is removed by `just init`.
+<!-- template-init:end -->
+
+Playwright failure traces, screenshots, videos, and the HTML report are retained by CI for seven days. All regular and failure-diagnostic Actions are pinned to full commit SHAs.
 
 Keep the workflow's Docker image tag aligned with the local Docker and compose names. If you use a different CI system, copy the same command set from the workflow. Update `.node-version`, `rust-toolchain.toml`, package metadata, and Docker build arguments together; `just test-toolchain` rejects version drift.
 

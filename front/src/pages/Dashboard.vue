@@ -48,7 +48,12 @@ onMounted(() => {
           </p>
         </div>
 
-        <button class="secondary-button" type="button" :disabled="app.loading" @click="app.refreshStatus">
+        <button
+          class="secondary-button"
+          type="button"
+          :disabled="app.loading"
+          @click="app.refreshStatus"
+        >
           {{ app.loading ? 'Refreshing' : 'Refresh status' }}
         </button>
       </section>
@@ -83,7 +88,6 @@ onMounted(() => {
           </div>
         </dl>
       </section>
-
       <!-- template-example:start -->
       <section id="resources" class="resource-section" aria-labelledby="resources-title">
         <div class="section-heading">

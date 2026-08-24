@@ -3,6 +3,9 @@
 
 /front/dist/
 /front/node_modules/
+/front/coverage/
+/front/playwright-report/
+/front/test-results/
 
 *.db
 *.sqlite

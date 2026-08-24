@@ -20,9 +20,7 @@ export function validateProxyTarget(value: string): string {
     throw new Error(`${DEV_PROXY_TARGET_ENV} is set but empty`)
   }
   if (value !== value.trim()) {
-    throw new Error(
-      `${DEV_PROXY_TARGET_ENV} must not contain leading or trailing whitespace`,
-    )
+    throw new Error(`${DEV_PROXY_TARGET_ENV} must not contain leading or trailing whitespace`)
   }
 
   let url: URL
@@ -42,9 +40,7 @@ export function validateProxyTarget(value: string): string {
     throw new Error(`${DEV_PROXY_TARGET_ENV} must contain a host`)
   }
   if (url.pathname !== '/' || url.search || url.hash) {
-    throw new Error(
-      `${DEV_PROXY_TARGET_ENV} must be an origin without a path, query, or fragment`,
-    )
+    throw new Error(`${DEV_PROXY_TARGET_ENV} must be an origin without a path, query, or fragment`)
   }
 
   return url.origin
@@ -67,9 +63,9 @@ export function parseConfigEndpoint(output: string): ConfigEndpoint {
     throw new Error('Rust config endpoint returned an invalid host')
   }
   if (
-    !Number.isInteger(endpoint.port)
-    || (endpoint.port as number) < 0
-    || (endpoint.port as number) > 65_535
+    !Number.isInteger(endpoint.port) ||
+    (endpoint.port as number) < 0 ||
+    (endpoint.port as number) > 65_535
   ) {
     throw new Error('Rust config endpoint returned an invalid port')
   }
@@ -95,7 +91,7 @@ export function proxyTargetFromEndpoint(endpoint: ConfigEndpoint): string {
   }
 
   const urlHost = connectHost.includes(':') ? `[${connectHost}]` : connectHost
-  return validateProxyTarget(`http://${urlHost}:${endpoint.port}`)
+  return validateProxyTarget(`http://${urlHost}:${String(endpoint.port)}`)
 }
 
 export function queryRustConfigEndpoint(): string {
@@ -122,13 +118,12 @@ export function queryRustConfigEndpoint(): string {
   )
 
   if (result.error) {
-    throw new Error(
-      `failed to run the Rust config endpoint: ${result.error.message}`,
-    )
+    throw new Error(`failed to run the Rust config endpoint: ${result.error.message}`)
   }
   if (result.status !== 0) {
-    const detail = result.stderr.trim()
-      || `process exited with status ${result.status ?? 'unknown'}`
+    const detail =
+      result.stderr.trim() ||
+      `process exited with status ${result.status === null ? 'unknown' : String(result.status)}`
     throw new Error(`Rust config endpoint failed: ${detail}`)
   }
 

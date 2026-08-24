@@ -5,4 +5,3 @@ import { router } from './router'
 import './style.css'
 
 createApp(App).use(createPinia()).use(router).mount('#app')
-

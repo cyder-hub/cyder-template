@@ -18,5 +18,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["dev-proxy.mts", "vite.config.ts", "vite.config.test.ts"]
+  "include": [
+    "dev-proxy.mts",
+    "playwright.config.ts",
+    "vite.config.ts",
+    "vite.config.test.ts",
+    "vitest.config.ts"
+  ]
 }

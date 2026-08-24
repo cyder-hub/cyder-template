@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const navItems = [
+  // Keep navigation entries centralized so generated projects can extend this list.
   { label: 'Dashboard', to: '/' },
   // template-example:start
   { label: 'Items', to: '/items' },
@@ -17,12 +18,7 @@ const navItems = [
       </RouterLink>
 
       <nav class="nav-list">
-        <RouterLink
-          v-for="item in navItems"
-          :key="item.label"
-          class="nav-link"
-          :to="item.to"
-        >
+        <RouterLink v-for="item in navItems" :key="item.label" class="nav-link" :to="item.to">
           {{ item.label }}
         </RouterLink>
       </nav>

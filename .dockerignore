@@ -11,6 +11,9 @@ target
 
 front/node_modules
 front/dist
+front/coverage
+front/playwright-report
+front/test-results
 
 *.log
 .env

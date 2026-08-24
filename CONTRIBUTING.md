@@ -25,12 +25,18 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 node --test scripts/toolchain.test.mjs
 npm --prefix front ci
+npm --prefix front run format:check
+npm --prefix front run lint
+npm --prefix front run typecheck
 npm --prefix front test
 npm --prefix front run build
 just audit
 docker compose -f docker-compose.yml config
 docker build -t cyder-template:ci -f Dockerfile .
 bash scripts/test-container-config.sh cyder-template:ci
+bash scripts/test-container-http.sh cyder-template:ci
+bash scripts/test-container-e2e.sh cyder-template:ci
+bash scripts/test-container-shutdown.sh cyder-template:ci
 ```
 
 The shorter project shortcut is:
@@ -39,7 +45,7 @@ The shorter project shortcut is:
 just check
 ```
 
-`just check` covers toolchain/bootstrap contracts, Rust formatting, strict backend lints/tests, frontend tests, and frontend build. `just audit` separately validates security-exception metadata, Rust advisories/licenses/sources/bans, and high-or-critical npm advisories; it requires cargo-deny 0.20.2 and network access. The checked-in GitHub Actions workflows mirror the direct backend, frontend, security, compose, and Docker build checks above. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, or release packaging.
+`just check` covers toolchain/bootstrap contracts, Rust formatting, strict backend lints/tests, and the frontend formatting, strict lint, type, coverage-test, and build gates. `just audit` separately validates security-exception metadata, Rust advisories/licenses/sources/bans, and high-or-critical npm advisories; it requires cargo-deny 0.20.2 and network access. The checked-in GitHub Actions workflows mirror the direct backend, frontend, security, compose, and Docker build checks above. Run `just setup-e2e` once before the browser contract; it installs pinned Chromium but does not request administrator access for Linux host packages. Run the direct Docker commands when you change `Dockerfile`, `docker-compose.yml`, `.dockerignore`, runtime configuration, frontend navigation, or release packaging.
 
 When database changes affect persistence, include the relevant backend coverage in the pull request notes. SQLite changes should usually include `cargo test --workspace`, which covers file-backed SQLite migrations, readiness, and CRUD. PostgreSQL behavior is covered by the opt-in integration test against an isolated test database:
 
@@ -62,12 +68,12 @@ Before opening a pull request:
 <!-- template-init:start -->
 - Update README and initialization guidance when changing project identity fields, Docker image names, database defaults, or automation commands.
 - Run `just test-template-init` when changing the one-time initializer, example-removal boundaries, or project identity touchpoints.
-- Confirm the regular Backend, Frontend, and Docker jobs pass when changing initialization behavior.
+- Confirm the regular Backend, Frontend, Docker, and template frontend/E2E jobs pass when changing initialization behavior.
 <!-- template-init:end -->
 
 ## Code Style
 
-Use `cargo fmt` for Rust formatting and the existing TypeScript/Vue toolchain for frontend checks. Prefer the project patterns already present in `server/`, `front/`, `Dockerfile`, and `docker-compose.yml`.
+Use `cargo fmt` for Rust formatting. Use Prettier as the only frontend formatter and ESLint's zero-warning type-aware TypeScript/Vue rules for frontend linting. Tests should assert user-observable text, state, ARIA attributes, and service interactions instead of storing large HTML snapshots. Prefer the project patterns already present in `server/`, `front/`, `Dockerfile`, and `docker-compose.yml`.
 
 ## Dependency Updates
 
@@ -78,6 +84,9 @@ cargo fmt --manifest-path Cargo.toml --check
 cargo clippy --manifest-path Cargo.toml --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --manifest-path Cargo.toml --workspace --locked
 npm --prefix front ci
+npm --prefix front run format:check
+npm --prefix front run lint
+npm --prefix front run typecheck
 npm --prefix front test
 npm --prefix front run build
 npm --prefix front outdated --json

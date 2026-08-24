@@ -22,14 +22,14 @@ const TEMPLATE_MARKER = 'template-init'
 const EXAMPLE_MARKER = 'template-example'
 
 const TEMPLATE_MARKER_FILES = new Map([
-  ['README.md', 1],
+  ['README.md', 2],
   ['CONTRIBUTING.md', 2],
   ['justfile', 1],
-  ['.github/workflows/ci.yml', 3],
+  ['.github/workflows/ci.yml', 4],
 ])
 
 const EXAMPLE_MARKER_FILES = new Map([
-  ['README.md', 2],
+  ['README.md', 3],
   ['server/src/app.rs', 4],
   ['server/src/config.rs', 1],
   ['server/src/controller/mod.rs', 1],
@@ -60,10 +60,14 @@ const BLOCKING_LOCAL_PATHS = [
 ]
 
 const EXAMPLE_FILES = [
+  'front/e2e/items.spec.ts',
   'front/src/pages/Items.vue',
   'front/src/pages/Users.vue',
   'front/src/services/items.ts',
   'front/src/services/users.ts',
+  'front/tests/Items.test.ts',
+  'front/tests/services.test.ts',
+  'front/tests/Users.test.ts',
   'server/migrations/postgres/2026-05-15-000000_create_items_and_users/down.sql',
   'server/migrations/postgres/2026-05-15-000000_create_items_and_users/up.sql',
   'server/migrations/sqlite/2026-05-15-000000_create_items_and_users/down.sql',
