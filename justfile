@@ -4,6 +4,16 @@ default: list
 list:
 	@just --list
 
+# template-init:start
+# Initialize project identity with an interactive wizard.
+init project="":
+	node "{{justfile_directory()}}/scripts/init-project.mjs" "{{project}}"
+
+# Test the project initializer in isolated Git worktrees.
+test-template-init:
+	node --test "{{justfile_directory()}}/scripts/template-project.test.mjs"
+# template-init:end
+
 # Check the required toolchain, optional container tooling, and local ports.
 doctor:
 	#!/usr/bin/env bash
@@ -101,7 +111,7 @@ dev-backend:
 	#!/usr/bin/env bash
 	set -euo pipefail
 	cd '{{justfile_directory()}}'
-	exec cargo run -p cyder-music
+	exec cargo run -p cyder-template
 
 # Resolve the backend endpoint, ensure frontend deps, and run the Vite dev server.
 dev-front:
@@ -131,7 +141,7 @@ build: build-backend build-front
 
 # Build the backend release binary.
 build-backend:
-	cd '{{justfile_directory()}}' && cargo build -p cyder-music --release
+	cd '{{justfile_directory()}}' && cargo build -p cyder-template --release
 
 # Build frontend assets from locked dependencies.
 build-front: front-ci-deps
@@ -142,7 +152,7 @@ test: test-backend test-front
 
 # Run backend tests.
 test-backend:
-	cd '{{justfile_directory()}}' && cargo test -p cyder-music
+	cd '{{justfile_directory()}}' && cargo test -p cyder-template
 
 # Run PostgreSQL integration tests against an isolated test database.
 test-postgres:
@@ -153,11 +163,11 @@ test-postgres:
 	  echo "DEV_POSTGRES_TEST_URL must point to an isolated PostgreSQL test database." >&2
 	  exit 2
 	fi
-	DEV_POSTGRES_TEST_URL="$DEV_POSTGRES_TEST_URL" cargo test -p cyder-music postgres -- --ignored --test-threads=1
+	DEV_POSTGRES_TEST_URL="$DEV_POSTGRES_TEST_URL" cargo test -p cyder-template postgres -- --ignored --test-threads=1
 
 # Validate the resolved deployment configuration without side effects.
 check-config:
-	cd '{{justfile_directory()}}' && cargo run --quiet --locked -p cyder-music -- config check
+	cd '{{justfile_directory()}}' && cargo run --quiet --locked -p cyder-template -- config check
 
 # Run frontend checks.
 test-front: front-ci-deps
@@ -188,7 +198,7 @@ audit:
 
 # Check backend compilation without producing release artifacts.
 check-backend:
-	cd '{{justfile_directory()}}' && cargo check -p cyder-music
+	cd '{{justfile_directory()}}' && cargo check -p cyder-template
 
 # Run strict backend lints across every workspace target and feature.
 lint-backend:
@@ -203,17 +213,17 @@ fmt-check:
 	cd '{{justfile_directory()}}' && cargo fmt --check
 
 # Build the local Docker image.
-docker-build image="cyder-music:local":
+docker-build image="cyder-template:local":
 	cd '{{justfile_directory()}}' && docker build -t "{{image}}" -f Dockerfile .
 
 # Verify graceful SIGTERM handling in an already-built container image.
-test-container-shutdown image="cyder-music:local":
+test-container-shutdown image="cyder-template:local":
 	bash '{{justfile_directory()}}/scripts/test-container-shutdown.sh' "{{image}}"
 
 # Verify the safe configuration and directory contract in an already-built image.
-test-container-config image="cyder-music:local":
+test-container-config image="cyder-template:local":
 	bash '{{justfile_directory()}}/scripts/test-container-config.sh' "{{image}}"
 
 # Verify HTTP boundaries and static assets in an already-built image.
-test-container-http image="cyder-music:local":
+test-container-http image="cyder-template:local":
 	bash '{{justfile_directory()}}/scripts/test-container-http.sh' "{{image}}"

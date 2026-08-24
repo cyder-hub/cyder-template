@@ -34,6 +34,22 @@ jobs:
           cargo fmt --version
           cargo clippy --version
 
+      # template-init:start
+      - name: Set up pinned Node for template initialization
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Initialize clean project
+        env:
+          DEV_TEMPLATE_INIT_ANSWERS: >-
+            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","runCheck":false,"confirm":true}
+        run: |
+          answers_file="${RUNNER_TEMP}/template-init-answers.json"
+          printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
+          node scripts/init-project.mjs --answers-file "${answers_file}"
+      # template-init:end
+
       - name: Install native build dependencies
         shell: bash
         run: |
@@ -84,6 +100,22 @@ jobs:
         working-directory: .
         run: node --test scripts/toolchain.test.mjs
 
+      # template-init:start
+      - name: Test template initialization contract
+        working-directory: .
+        run: node --test scripts/template-project.test.mjs
+
+      - name: Initialize clean project
+        working-directory: .
+        env:
+          DEV_TEMPLATE_INIT_ANSWERS: >-
+            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","runCheck":false,"confirm":true}
+        run: |
+          answers_file="${RUNNER_TEMP}/template-init-answers.json"
+          printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
+          node scripts/init-project.mjs --answers-file "${answers_file}"
+      # template-init:end
+
       - name: Install dependencies
         run: npm ci
 
@@ -101,17 +133,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # template-init:start
+      - name: Set up pinned Node for template initialization
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Activate pinned Rust toolchain for template initialization
+        shell: bash
+        run: |
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+
+      - name: Initialize clean project
+        env:
+          DEV_TEMPLATE_INIT_ANSWERS: >-
+            {"projectSlug":"ci-service","displayName":"CI Service","githubRepository":"cyder-hub/ci-service","runCheck":false,"confirm":true}
+        run: |
+          answers_file="${RUNNER_TEMP}/template-init-answers.json"
+          printf '%s\n' "${DEV_TEMPLATE_INIT_ANSWERS}" > "${answers_file}"
+          node scripts/init-project.mjs --answers-file "${answers_file}"
+      # template-init:end
+
       - name: Validate compose file
         run: docker compose -f docker-compose.yml config
 
       - name: Build image
-        run: docker build -t cyder-music:ci -f Dockerfile .
+        run: docker build -t cyder-template:ci -f Dockerfile .
 
       - name: Test container configuration contract
-        run: bash scripts/test-container-config.sh cyder-music:ci
+        run: bash scripts/test-container-config.sh cyder-template:ci
 
       - name: Test container HTTP and static-asset contract
-        run: bash scripts/test-container-http.sh cyder-music:ci
+        run: bash scripts/test-container-http.sh cyder-template:ci
 
       - name: Test graceful container shutdown
-        run: bash scripts/test-container-shutdown.sh cyder-music:ci
+        run: bash scripts/test-container-shutdown.sh cyder-template:ci

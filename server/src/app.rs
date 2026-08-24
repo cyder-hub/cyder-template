@@ -25,7 +25,7 @@ use crate::{
     shutdown::Lifecycle,
 };
 
-pub const APP_NAME: &str = "cyder-music";
+pub const APP_NAME: &str = "cyder-template";
 pub const FRONTEND_DIR: &str = "front/dist";
 const SINGLE_INSTANCE_WORKER_ID: u64 = 1;
 
@@ -96,6 +96,24 @@ fn build_app_with_frontend_dir(state: AppState, frontend_dir: PathBuf) -> Router
     let max_request_body_bytes = protection.max_request_body_bytes();
     let protected_routes = Router::new()
         .route("/readyz", get(controller::health::readyz))
+        // template-example:start
+        .route(
+            "/api/items",
+            get(controller::items::list_items).post(controller::items::create_item),
+        )
+        .route(
+            "/api/items/{id}",
+            get(controller::items::get_item).delete(controller::items::delete_item),
+        )
+        .route(
+            "/api/users",
+            get(controller::users::list_users).post(controller::users::create_user),
+        )
+        .route(
+            "/api/users/{id}",
+            get(controller::users::get_user).delete(controller::users::delete_user),
+        )
+        // template-example:end
         .route("/api", any(api_not_found))
         .route("/api/", any(api_not_found))
         .route("/api/{*path}", any(api_not_found));
@@ -291,6 +309,27 @@ mod tests {
         .expect("test app state should initialize")
     }
 
+    // template-example:start
+    async fn test_state_with_sqlite_file(file_name: &str) -> (tempfile::TempDir, AppState) {
+        let temp_dir = tempfile::tempdir().expect("temp dir should be created");
+        let database_url = temp_dir
+            .path()
+            .join(file_name)
+            .to_string_lossy()
+            .into_owned();
+
+        let state = AppState::new(AppConfig {
+            database_url: crate::config::DatabaseUrl::sqlite_path(database_url),
+            database_pool_size: 1,
+            ..AppConfig::default()
+        })
+        .await
+        .expect("test app state should initialize");
+
+        (temp_dir, state)
+    }
+    // template-example:end
+
     async fn request_json(
         app: Router,
         method: Method,
@@ -349,6 +388,15 @@ mod tests {
         (status, String::from_utf8_lossy(&bytes).into_owned())
     }
 
+    // template-example:start
+    fn json_id_as_i64(value: &Value) -> i64 {
+        value
+            .as_str()
+            .and_then(|id| id.parse::<i64>().ok())
+            .expect("json id should be a signed 64-bit integer string")
+    }
+    // template-example:end
+
     #[tokio::test(flavor = "multi_thread")]
     async fn healthz_returns_ok() {
         let response = build_app(test_state().await)
@@ -406,6 +454,124 @@ mod tests {
             })
         );
     }
+
+    // template-example:start
+    #[tokio::test(flavor = "multi_thread")]
+    async fn items_api_creates_lists_reads_deletes_and_returns_404() {
+        let (_temp_dir, state) = test_state_with_sqlite_file("items-api.sqlite").await;
+        let app = build_app(state);
+
+        let (status, body) = request_json(app.clone(), Method::GET, "/api/items", None).await;
+        assert_eq!(status, StatusCode::OK, "list body: {body}");
+        assert_eq!(body, json!([]));
+
+        let (status, created) = request_json(
+            app.clone(),
+            Method::POST,
+            "/api/items",
+            Some(json!({
+                "title": "Ship CRUD",
+                "description": "Wire HTTP handlers",
+                "completed": true
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "create body: {created}");
+        let item_id = json_id_as_i64(&created["id"]);
+        assert!(item_id > 0);
+        assert!(created["id"].is_string());
+        assert_eq!(created["title"], "Ship CRUD");
+        assert_eq!(created["description"], "Wire HTTP handlers");
+        assert_eq!(created["completed"], true);
+
+        let (status, fetched) = request_json(
+            app.clone(),
+            Method::GET,
+            &format!("/api/items/{item_id}"),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "get body: {fetched}");
+        assert_eq!(fetched, created);
+
+        let (status, listed) = request_json(app.clone(), Method::GET, "/api/items", None).await;
+        assert_eq!(status, StatusCode::OK, "list body: {listed}");
+        assert_eq!(listed, json!([created]));
+
+        let (status, deleted) = request_json(
+            app.clone(),
+            Method::DELETE,
+            &format!("/api/items/{item_id}"),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "delete body: {deleted}");
+        assert_eq!(deleted, json!({ "deleted": true }));
+
+        let (status, missing) =
+            request_json(app, Method::GET, &format!("/api/items/{item_id}"), None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "missing body: {missing}");
+        assert_eq!(missing["error"], "not_found");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn users_api_creates_lists_reads_deletes_and_returns_404() {
+        let (_temp_dir, state) = test_state_with_sqlite_file("users-api.sqlite").await;
+        let app = build_app(state);
+
+        let (status, body) = request_json(app.clone(), Method::GET, "/api/users", None).await;
+        assert_eq!(status, StatusCode::OK, "list body: {body}");
+        assert_eq!(body, json!([]));
+
+        let (status, created) = request_json(
+            app.clone(),
+            Method::POST,
+            "/api/users",
+            Some(json!({
+                "name": "Template Operator",
+                "email": "operator@example.com",
+                "active": false
+            })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "create body: {created}");
+        let user_id = json_id_as_i64(&created["id"]);
+        assert!(user_id > 0);
+        assert!(created["id"].is_string());
+        assert_eq!(created["name"], "Template Operator");
+        assert_eq!(created["email"], "operator@example.com");
+        assert_eq!(created["active"], false);
+
+        let (status, fetched) = request_json(
+            app.clone(),
+            Method::GET,
+            &format!("/api/users/{user_id}"),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "get body: {fetched}");
+        assert_eq!(fetched, created);
+
+        let (status, listed) = request_json(app.clone(), Method::GET, "/api/users", None).await;
+        assert_eq!(status, StatusCode::OK, "list body: {listed}");
+        assert_eq!(listed, json!([created]));
+
+        let (status, deleted) = request_json(
+            app.clone(),
+            Method::DELETE,
+            &format!("/api/users/{user_id}"),
+            None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "delete body: {deleted}");
+        assert_eq!(deleted, json!({ "deleted": true }));
+
+        let (status, missing) =
+            request_json(app, Method::DELETE, &format!("/api/users/{user_id}"), None).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "missing body: {missing}");
+        assert_eq!(missing["error"], "not_found");
+    }
+    // template-example:end
 
     #[tokio::test(flavor = "multi_thread")]
     async fn frontend_history_routes_fallback_to_index_without_shadowing_api_404s() {

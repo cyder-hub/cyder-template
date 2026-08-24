@@ -1,1 +1,1 @@
-CREATE DATABASE cyder_music_test;
+CREATE DATABASE cyder_template_test;

@@ -1,13 +1,13 @@
 [package]
-name = "cyder-music"
+name = "cyder-template"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.97.1"
 license = "MIT"
-default-run = "cyder-music"
+default-run = "cyder-template"
 
 [[bin]]
-name = "cyder-music"
+name = "cyder-template"
 path = "src/main.rs"
 
 [dependencies]

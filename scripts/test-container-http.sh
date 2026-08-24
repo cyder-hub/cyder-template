@@ -8,7 +8,7 @@ if [[ -z "$image" ]]; then
 fi
 
 temporary_directory="$(mktemp -d)"
-container_name="cyder-music-http-${GITHUB_RUN_ID:-local}-$$"
+container_name="cyder-template-http-${GITHUB_RUN_ID:-local}-$$"
 runtime_warning_value="runtime-warning-value-marker"
 
 cleanup() {

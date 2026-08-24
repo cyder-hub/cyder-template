@@ -13,7 +13,7 @@ exec_as_app() {
 
 case "${1:-}" in
   config|healthcheck|--help|-h)
-    exec_as_app /app/bin/cyder-music "$@"
+    exec_as_app /app/bin/cyder-template "$@"
     ;;
 esac
 
@@ -39,6 +39,6 @@ prepare_directory "$data_dir/config"
 prepare_directory "$data_dir/db"
 prepare_directory "$data_dir/storage"
 prepare_directory "$data_dir/logs"
-prepare_directory "/tmp/cyder-music"
+prepare_directory "/tmp/cyder-template"
 
 exec_as_app "$@"
