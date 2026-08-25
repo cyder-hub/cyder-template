@@ -455,10 +455,7 @@ fn log_http_error(request_id: &str, error: &HttpError) {
             error = %format_error_chain(error),
             "HTTP readiness request failed"
         ),
-        // template-example:start
-        HttpError::NotFound { .. } |
-        // template-example:end
-        HttpError::ApiNotFound => {}
+        _ if public.status == StatusCode::NOT_FOUND => {}
         _ => tracing::error!(
             event = "http_request_failed",
             request_id = %request_id,

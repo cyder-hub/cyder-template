@@ -65,13 +65,6 @@ impl DatabaseUrl {
         Self(":memory:".to_string())
     }
 
-    // template-example:start
-    #[cfg(test)]
-    pub fn sqlite_path(path: impl Into<String>) -> Self {
-        Self(path.into())
-    }
-    // template-example:end
-
     fn parse(value: String) -> Result<(Self, DatabaseKind), ConfigValidationError> {
         validate_non_empty_string("database_url", &value)?;
 

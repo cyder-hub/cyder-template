@@ -4,6 +4,7 @@
     "rustIdentifier": "cyder_template",
     "frontendPackage": "cyder-template-front",
     "displayName": "cyder-template",
+    "projectDescription": "A backend-first Rust and Vue application with SQLite and PostgreSQL support.",
     "githubRepository": "cyder-hub/cyder-template"
   }
 }

@@ -17,11 +17,13 @@ import test from 'node:test'
 
 import {
   defaultDisplayName,
+  defaultProjectDescription,
   deriveIdentity,
   parseGitHubRepository,
   removeMarkedBlocks,
   testing,
   validateDisplayName,
+  validateProjectDescription,
   validateProjectSlug,
 } from './template-project.mjs'
 
@@ -30,14 +32,14 @@ const SOURCE_IDENTITY = {
   rustIdentifier: 'cyder_template',
   frontendPackage: 'cyder-template-front',
   displayName: 'cyder-template',
+  projectDescription:
+    'A backend-first Rust and Vue application with SQLite and PostgreSQL support.',
   githubRepository: 'cyder-hub/cyder-template',
 }
 const PRODUCT_CARGO_TARGET = join(
   testing.PROJECT_ROOT,
   'target/template-product-check',
 )
-const RETAINED_TEMPLATE_NOTICE =
-  'This repository starts as a project template.'
 const GENERATED_PROJECT_RESIDUALS = [
   'application generated from the template',
   'This template deliberately',
@@ -63,33 +65,33 @@ function run(commandName, args, options = {}) {
     throw result.error
   }
   if (!options.allowFailure && result.status !== 0) {
-    const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
-    assert.fail(
-      `${commandName} ${args.join(' ')} failed: ${output}`,
-    )
+    const output = [result.stdout, result.stderr]
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+    assert.fail(`${commandName} ${args.join(' ')} failed: ${output}`)
   }
   return result
 }
 
 function repositoryFiles(root = testing.PROJECT_ROOT) {
-  return run(
-    'git',
-    [
-      '-C',
-      root,
-      'ls-files',
-      '--cached',
-      '--others',
-      '--exclude-standard',
-      '-z',
-    ],
-  )
+  return run('git', [
+    '-C',
+    root,
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '-z',
+  ])
     .stdout.split('\0')
     .filter(Boolean)
 }
 
 function createFixture(directoryName) {
-  const temporaryDirectory = mkdtempSync(join(tmpdir(), 'template-project-test-'))
+  const temporaryDirectory = mkdtempSync(
+    join(tmpdir(), 'template-project-test-'),
+  )
   const repository = join(temporaryDirectory, directoryName)
   mkdirSync(repository, { recursive: true })
 
@@ -106,12 +108,18 @@ function createFixture(directoryName) {
 
   run('git', ['init', '--initial-branch=main'], { cwd: repository })
   run('git', ['config', 'user.name', 'Template Test'], { cwd: repository })
-  run('git', ['config', 'user.email', 'template-test@example.test'], { cwd: repository })
-  run('git', ['add', '--all'], { cwd: repository })
-  run('git', ['commit', '-m', 'test fixture'], { cwd: repository })
-  run('git', ['remote', 'add', 'origin', `https://github.com/acme/${directoryName}.git`], {
+  run('git', ['config', 'user.email', 'template-test@example.test'], {
     cwd: repository,
   })
+  run('git', ['add', '--all'], { cwd: repository })
+  run('git', ['commit', '-m', 'test fixture'], { cwd: repository })
+  run(
+    'git',
+    ['remote', 'add', 'origin', `https://github.com/acme/${directoryName}.git`],
+    {
+      cwd: repository,
+    },
+  )
 
   return {
     repository,
@@ -124,7 +132,10 @@ function createFixture(directoryName) {
 
 function initializeFixture(fixture, answers) {
   const answersPath = join(fixture.temporaryDirectory, 'answers.json')
-  writeFileSync(answersPath, `${JSON.stringify({ ...answers, confirm: true }, null, 2)}\n`)
+  writeFileSync(
+    answersPath,
+    `${JSON.stringify({ ...answers, confirm: true }, null, 2)}\n`,
+  )
   return run(
     process.execPath,
     ['scripts/init-project.mjs', '--answers-file', answersPath],
@@ -134,7 +145,9 @@ function initializeFixture(fixture, answers) {
 
 function commandOutput(result) {
   const output = [result.stdout, result.stderr].filter(Boolean).join('\n')
-  return output || JSON.stringify({ status: result.status, signal: result.signal })
+  return (
+    output || JSON.stringify({ status: result.status, signal: result.signal })
+  )
 }
 
 function trackedTextResiduals(repository, tokens) {
@@ -180,7 +193,10 @@ function assertInitializedFixture(fixture, expected) {
   )
   assert.equal(workflow.includes('template-init:'), false)
   assert.equal(workflow.includes('DEV_TEMPLATE_INIT_ANSWERS'), false)
-  assert.equal(workflow.includes('Test template initialization contract'), false)
+  assert.equal(
+    workflow.includes('Test template initialization contract'),
+    false,
+  )
   assert.equal(
     readFileSync(join(fixture.repository, 'front/index.html'), 'utf8').includes(
       `<title>${expected.displayName}</title>`,
@@ -188,15 +204,36 @@ function assertInitializedFixture(fixture, expected) {
     true,
   )
 
-  const app = readFileSync(join(fixture.repository, 'server/src/app.rs'), 'utf8')
+  const app = readFileSync(
+    join(fixture.repository, 'server/src/app.rs'),
+    'utf8',
+  )
   assert.equal(app.includes('template-example:'), false)
   assert.equal(app.includes('/api/items'), false)
-  assert.equal(existsSync(join(fixture.repository, 'front/src/pages/Items.vue')), false)
-  assert.equal(existsSync(join(fixture.repository, 'front/tests/Items.test.ts')), false)
-  assert.equal(existsSync(join(fixture.repository, 'front/tests/services.test.ts')), false)
-  assert.equal(existsSync(join(fixture.repository, 'front/tests/Users.test.ts')), false)
-  assert.equal(existsSync(join(fixture.repository, 'front/e2e/items.spec.ts')), false)
-  assert.equal(existsSync(join(fixture.repository, 'front/e2e/dashboard.spec.ts')), true)
+  assert.equal(
+    existsSync(join(fixture.repository, 'front/src/pages/Items.vue')),
+    false,
+  )
+  assert.equal(
+    existsSync(join(fixture.repository, 'front/tests/Items.test.ts')),
+    false,
+  )
+  assert.equal(
+    existsSync(join(fixture.repository, 'front/tests/services.test.ts')),
+    false,
+  )
+  assert.equal(
+    existsSync(join(fixture.repository, 'front/tests/Users.test.ts')),
+    false,
+  )
+  assert.equal(
+    existsSync(join(fixture.repository, 'front/e2e/items.spec.ts')),
+    false,
+  )
+  assert.equal(
+    existsSync(join(fixture.repository, 'front/e2e/dashboard.spec.ts')),
+    true,
+  )
   assert.equal(
     existsSync(join(fixture.repository, 'server/migrations/sqlite/.gitkeep')),
     true,
@@ -211,9 +248,7 @@ function assertInitializedFixture(fixture, expected) {
   assert.equal(justfile.includes('test-template-init'), false)
 
   const readme = readFileSync(join(fixture.repository, 'README.md'), 'utf8')
-  assert.equal(readme.includes(RETAINED_TEMPLATE_NOTICE), true)
-  assert.equal(readme.includes('run `just init`'), true)
-  assert.equal(readme.includes('you may delete this notice'), true)
+  assert.equal(readme.includes(expected.projectDescription), true)
   assert.deepEqual(
     trackedTextResiduals(fixture.repository, GENERATED_PROJECT_RESIDUALS),
     [],
@@ -240,38 +275,88 @@ function assertInitializedFixture(fixture, expected) {
   assert.equal(diffCheck.status, 0, `${diffCheck.stderr}\n${diffCheck.stdout}`)
 }
 
-test('derives every machine identity from one slug', () => {
-  assert.deepEqual(deriveIdentity('my-api', 'My API', 'acme/my-api'), {
-    projectSlug: 'my-api',
-    rustIdentifier: 'my_api',
-    frontendPackage: 'my-api-front',
-    displayName: 'My API',
-    githubRepository: 'acme/my-api',
-  })
+test('derives every project identity from one slug', () => {
+  assert.deepEqual(
+    deriveIdentity(
+      'my-api',
+      'My API',
+      'acme/my-api',
+      'Catalog operations API.',
+    ),
+    {
+      projectSlug: 'my-api',
+      rustIdentifier: 'my_api',
+      frontendPackage: 'my-api-front',
+      displayName: 'My API',
+      projectDescription: 'Catalog operations API.',
+      githubRepository: 'acme/my-api',
+    },
+  )
   assert.equal(defaultDisplayName('my-api'), 'My Api')
+  assert.equal(
+    defaultProjectDescription('My API'),
+    'My API is a backend-first Rust and Vue application.',
+  )
 })
 
 test('keeps the source manifest identity-only', () => {
   assert.deepEqual(
-    JSON.parse(readFileSync(join(testing.PROJECT_ROOT, testing.STATE_PATH), 'utf8')),
+    JSON.parse(
+      readFileSync(join(testing.PROJECT_ROOT, testing.STATE_PATH), 'utf8'),
+    ),
     { identity: SOURCE_IDENTITY },
   )
 })
 
-test('validates slugs and display names conservatively', () => {
+test('validates project identity text conservatively', () => {
   assert.doesNotThrow(() => validateProjectSlug('my-api', SOURCE_IDENTITY))
-  assert.throws(() => validateProjectSlug('My API', SOURCE_IDENTITY), /kebab-case/)
-  assert.throws(() => validateProjectSlug('cyder-template-api', SOURCE_IDENTITY), /source/)
+  assert.throws(
+    () => validateProjectSlug('My API', SOURCE_IDENTITY),
+    /kebab-case/,
+  )
+  assert.throws(
+    () => validateProjectSlug('cyder-template-api', SOURCE_IDENTITY),
+    /source/,
+  )
   assert.throws(() => validateProjectSlug('con', SOURCE_IDENTITY), /reserved/)
   assert.doesNotThrow(() => validateDisplayName('我的 API', SOURCE_IDENTITY))
-  assert.throws(() => validateDisplayName('Bad\nName', SOURCE_IDENTITY), /control/)
+  assert.throws(
+    () => validateDisplayName('Bad\nName', SOURCE_IDENTITY),
+    /control/,
+  )
+  assert.doesNotThrow(() =>
+    validateProjectDescription('用于内部目录操作的 API。', SOURCE_IDENTITY),
+  )
+  assert.throws(
+    () => validateProjectDescription('Bad\nDescription', SOURCE_IDENTITY),
+    /control/,
+  )
+  for (const marker of ['template-init:start', 'template-example:end']) {
+    assert.throws(
+      () =>
+        validateProjectDescription(
+          `Description with ${marker}`,
+          SOURCE_IDENTITY,
+        ),
+      /lifecycle marker/,
+    )
+  }
 })
 
 test('normalizes supported GitHub repository forms', () => {
   assert.equal(parseGitHubRepository('acme/my-api'), 'acme/my-api')
-  assert.equal(parseGitHubRepository('https://github.com/acme/my-api.git'), 'acme/my-api')
-  assert.equal(parseGitHubRepository('git@github.com:acme/my-api.git'), 'acme/my-api')
-  assert.throws(() => parseGitHubRepository('https://example.com/acme/my-api'), /github.com/)
+  assert.equal(
+    parseGitHubRepository('https://github.com/acme/my-api.git'),
+    'acme/my-api',
+  )
+  assert.equal(
+    parseGitHubRepository('git@github.com:acme/my-api.git'),
+    'acme/my-api',
+  )
+  assert.throws(
+    () => parseGitHubRepository('https://example.com/acme/my-api'),
+    /github.com/,
+  )
 })
 
 test('removes complete marker blocks and preserves CRLF', () => {
@@ -282,7 +367,11 @@ test('removes complete marker blocks and preserves CRLF', () => {
   assert.equal(result.count, 1)
   assert.equal(result.text, 'before\r\nafter\r\n')
   assert.throws(
-    () => removeMarkedBlocks('// template-example:start\nmissing end\n', 'template-example'),
+    () =>
+      removeMarkedBlocks(
+        '// template-example:start\nmissing end\n',
+        'template-example',
+      ),
     /matching end/,
   )
 })
@@ -294,6 +383,7 @@ test('initializes one clean project and removes all template lifecycle files', (
     const answers = {
       projectSlug: 'sample-service',
       displayName: 'Sample Service',
+      projectDescription: 'Service for sample catalog operations.',
       githubRepository: 'acme/sample-service',
       runCheck: false,
     }
@@ -315,10 +405,14 @@ test('initializes one clean project and removes all template lifecycle files', (
     }
 
     if (process.env.DEV_TEMPLATE_CONTAINER_CHECK === '1') {
-      run('docker', ['build', '--quiet', '-t', productImage, '-f', 'Dockerfile', '.'], {
-        cwd: fixture.repository,
-        inherit: true,
-      })
+      run(
+        'docker',
+        ['build', '--quiet', '-t', productImage, '-f', 'Dockerfile', '.'],
+        {
+          cwd: fixture.repository,
+          inherit: true,
+        },
+      )
       run('bash', ['scripts/test-container-e2e.sh', productImage], {
         cwd: fixture.repository,
         inherit: true,
@@ -342,6 +436,30 @@ test('initializes one clean project and removes all template lifecycle files', (
   }
 })
 
+test('inserts project descriptions with replacement sequences literally', () => {
+  const fixture = createFixture('replacement-sequences')
+  try {
+    const projectDescription = "Costs $& and $$ while `$` and $' stay literal."
+    const answers = {
+      projectSlug: 'replacement-sequences',
+      displayName: 'Replacement Sequences',
+      projectDescription,
+      githubRepository: 'acme/replacement-sequences',
+      runCheck: false,
+    }
+    const result = initializeFixture(fixture, answers)
+    assert.equal(result.status, 0, commandOutput(result))
+
+    const readme = readFileSync(join(fixture.repository, 'README.md'), 'utf8')
+    assert.equal(
+      readme.split('\n').filter((line) => line === projectDescription).length,
+      1,
+    )
+  } finally {
+    fixture.cleanup()
+  }
+})
+
 test('rejects unsupported non-interactive answer fields', () => {
   for (const unsupported of ['unexpectedOption', 'futureOption']) {
     const fixture = createFixture(`unsupported-${unsupported.toLowerCase()}`)
@@ -355,7 +473,11 @@ test('rejects unsupported non-interactive answer fields', () => {
       })
       assert.notEqual(result.status, 0)
       assert.match(commandOutput(result), new RegExp(unsupported))
-      assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
+      assert.equal(
+        run('git', ['status', '--porcelain'], { cwd: fixture.repository })
+          .stdout,
+        '',
+      )
     } finally {
       fixture.cleanup()
     }
@@ -372,7 +494,10 @@ test('rejects invalid answers without changing the worktree', () => {
       runCheck: false,
     })
     assert.notEqual(result.status, 0)
-    assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
+    assert.equal(
+      run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout,
+      '',
+    )
   } finally {
     fixture.cleanup()
   }
@@ -381,7 +506,10 @@ test('rejects invalid answers without changing the worktree', () => {
 test('rejects a dirty worktree before reading initialization answers', () => {
   const fixture = createFixture('dirty-service')
   try {
-    writeFileSync(join(fixture.repository, 'untracked.txt'), 'do not overwrite\n')
+    writeFileSync(
+      join(fixture.repository, 'untracked.txt'),
+      'do not overwrite\n',
+    )
     const result = initializeFixture(fixture, {
       projectSlug: 'dirty-service',
       displayName: 'Dirty Service',
@@ -409,8 +537,14 @@ test('rejects every local artifact path before initialization', () => {
       })
       assert.notEqual(result.status, 0)
       assert.match(commandOutput(result), /clean template checkout/)
-      assert.match(commandOutput(result), new RegExp(path.replaceAll('/', '\\/')))
-      assert.equal(existsSync(join(fixture.repository, testing.STATE_PATH)), true)
+      assert.match(
+        commandOutput(result),
+        new RegExp(path.replaceAll('/', '\\/')),
+      )
+      assert.equal(
+        existsSync(join(fixture.repository, testing.STATE_PATH)),
+        true,
+      )
     } finally {
       fixture.cleanup()
     }
@@ -440,7 +574,10 @@ test('rejects drifted marker structure without partial writes', () => {
     })
     assert.notEqual(result.status, 0)
     assert.match(commandOutput(result), /matching end/)
-    assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
+    assert.equal(
+      run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout,
+      '',
+    )
   } finally {
     fixture.cleanup()
   }
@@ -450,9 +587,14 @@ test('rolls back every write when post-write validation fails', () => {
   const fixture = createFixture('rollback-service')
   try {
     const manifestPath = join(fixture.repository, 'server/Cargo.toml')
-    writeFileSync(manifestPath, `${readFileSync(manifestPath, 'utf8')}\ninvalid cargo syntax\n`)
+    writeFileSync(
+      manifestPath,
+      `${readFileSync(manifestPath, 'utf8')}\ninvalid cargo syntax\n`,
+    )
     run('git', ['add', 'server/Cargo.toml'], { cwd: fixture.repository })
-    run('git', ['commit', '-m', 'break manifest for rollback test'], { cwd: fixture.repository })
+    run('git', ['commit', '-m', 'break manifest for rollback test'], {
+      cwd: fixture.repository,
+    })
 
     const result = initializeFixture(fixture, {
       projectSlug: 'rollback-service',
@@ -462,9 +604,14 @@ test('rolls back every write when post-write validation fails', () => {
     })
     assert.notEqual(result.status, 0)
     assert.match(commandOutput(result), /all project files were restored/)
-    assert.equal(run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout, '')
+    assert.equal(
+      run('git', ['status', '--porcelain'], { cwd: fixture.repository }).stdout,
+      '',
+    )
     assert.deepEqual(
-      JSON.parse(readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8')),
+      JSON.parse(
+        readFileSync(join(fixture.repository, testing.STATE_PATH), 'utf8'),
+      ),
       { identity: SOURCE_IDENTITY },
     )
   } finally {

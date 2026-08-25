@@ -7,9 +7,7 @@ mod error;
 mod http_middleware;
 mod id;
 mod schema;
-// template-example:start
 mod service;
-// template-example:end
 mod shutdown;
 
 use std::{
